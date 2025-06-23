@@ -1,0 +1,12 @@
+# 基础任务操作
+tasks:
+  - name: "pick_and_place_cup_to_shelf"
+    type: "manipulation"
+    parameters:
+      object: "coffee_cup"
+      target: "shelf"
+    constraints:
+      - type: "collision_free"
+      - type: "orientation_maintain"  # 保持物体朝向
+    safety_limits:
+      max_force: 30.0

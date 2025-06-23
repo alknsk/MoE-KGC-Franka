@@ -1,0 +1,13 @@
+# 协作任务
+tasks:
+  - name: "joint_object_transfer"
+    type: "collaboration"
+    parameters:
+      object: "tool_kit"
+      target: "user_hand"
+    constraints:
+      - type: "collision_free"
+      - type: "handover_position"  # 交接位置约束
+    safety_limits:
+      max_force: 18.0
+      handover_velocity: 0.2  # 交接速度(m/s)

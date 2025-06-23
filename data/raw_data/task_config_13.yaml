@@ -1,0 +1,14 @@
+#  人机协作搬运任务
+tasks:
+  - name: "human_robot_collaborative_carry"
+    type: "collaboration"
+    parameters:
+      object: "heavy_box"
+      target: "storage_shelf"
+    constraints:
+      - type: "human_workspace"       # 符合人体工学工作空间
+      - type: "force_sharing_ratio"   # 力分配比例约束
+    safety_limits:
+      max_force: 30.0
+      human_force_ratio: 0.4          # 人力承担比例(40%)
+      proximity_distance: 0.6         # 安全协作距离(m)

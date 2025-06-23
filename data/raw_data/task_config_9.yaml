@@ -1,0 +1,13 @@
+# 易碎品操作
+tasks:
+  - name: "transfer_egg_to_plate"
+    type: "manipulation"
+    parameters:
+      object: "egg"
+      target: "plate"
+    constraints:
+      - type: "collision_free"
+      - type: "position_precision"  # 位置精度
+    safety_limits:
+      max_force: 5.0
+      acceleration_limit: 0.5  # 加速度限制(m/s²)

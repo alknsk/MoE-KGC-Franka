@@ -1,0 +1,102 @@
+# 模型配置
+model:
+  name: "MoE-KGC-Franka" # 模型名称
+  hidden_dim: 768 # 隐藏层维度
+  num_experts: 5 # 专家数量
+  expert_hidden_dim: 512 # 专家网络隐藏层维度
+  num_heads: 12 # 注意力头数量
+  dropout_rate: 0.1 # 丢弃率
+  activation: "gelu"  # 激活函数
+
+# 专家配置
+experts:
+  action_expert:
+    hidden_dims: [512, 256] # 动作专家网络隐藏层维度
+    use_attention: true # 是否使用注意力机制
+  spatial_expert:
+    hidden_dims: [512, 256] # 空间专家网络隐藏层维度
+    use_attention: true # 是否使用注意力机制
+  temporal_expert:
+    hidden_dims: [512, 256] # 时间专家网络隐藏层维度
+    use_attention: true # 是否使用注意力机制
+  semantic_expert:
+    hidden_dims: [512, 256] # 语义专家网络隐藏层维度
+    use_attention: true # 是否使用注意力机制
+  safety_expert:
+    hidden_dims: [512, 256] # 安全专家网络隐藏层维度
+    use_attention: true # 是否使用注意力机制
+
+# 门控系统配置
+gating:
+  temperature: 1.0  # 门控温度
+  noise_std: 0.1  #  噪声标准差
+  top_k: 2  # 选择的前k个专家
+  load_balancing_weight: 0.01  # 负载均衡权重
+
+# 图配置
+graph:
+  num_layers: 3 #图神经网络层数
+  aggregation: "mean" # 聚合方式
+  use_edge_features: true  # 是否使用边特征
+  edge_hidden_dim: 128 # 边特征隐藏层维度
+
+# 训练配置
+training:
+  batch_size: 32 # 批次大小
+  learning_rate: 1e-4 # 学习率
+  weight_decay: 1e-5 # 权重衰减
+  epochs: 100 # 训练轮数
+  gradient_clip: 1.0 # 梯度裁剪
+  warmup_steps: 1000 # 热身步数
+  scheduler: "cosine" # 学习率调度器
+
+# 数据配置
+data:
+  max_seq_length: 512 # 最大序列长度
+  vocab_size: 30522  # 词汇表大小
+  num_relations: 50 # 关系数量
+  num_entity_types: 20 # 实体类型数量
+
+# Franka机器人特定配置
+franka:
+  joint_dim: 7  # 关节维度
+  gripper_dim: 2 # 夹爪维度
+  force_torque_dim: 6  # 力扭矩维度
+  workspace_bounds:
+    x: [-0.855, 0.855]  # x轴工作空间边界
+    y: [-0.855, 0.855]  # y轴工作空间边界
+    z: [0.0, 1.19]  # z轴工作空间边界
+
+# 路径配置
+paths:
+  data_dir: "./data/raw_data"  # 原始数据目录
+  processed_dir: "./data/processed"  # 处理后数据目录
+  model_dir: "./checkpoints" # 模型保存目录
+  log_dir: "./logs" # 日志目录
+
+# 评估配置
+evaluation:
+  metrics: ["accuracy", "f1", "mrr", "hits@k"]
+  k_values: [1, 3, 10]
+  save_predictions: true
+
+ # 可视化配置
+visualization:
+  use_pyvis: true
+  layout: "hierarchical"  # 可选: hierarchical, force, circular
+  physics_enabled: true
+  node_size_range: [20, 40]
+  edge_smooth: true
+
+  # Franka特定配置
+  show_physical_structure: true
+  show_safety_constraints: true
+  show_expert_activation: true
+
+  # 颜色主题
+  theme: "dark"  # 可选: dark, light
+
+  # 输出设置
+  width: "100%"
+  height: "1200px"
+  notebook_mode: true

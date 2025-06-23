@@ -1,0 +1,76 @@
+moe_kgc_franka/
+│
+├── README.md
+├── requirements.txt
+├── setup.py
+├── config/
+│   ├── __init__.py
+│   ├── default_config.yaml
+│   └── model_config.py
+│
+├── data/
+│   ├── __init__.py
+│   ├── data_loader.py
+│   ├── preprocessors/
+│   │   ├── __init__.py
+│   │   ├── pdf_processor.py
+│   │   ├── csv_processor.py
+│   │   └── yaml_processor.py
+│   └── dataset.py
+│
+├── models/
+│   ├── __init__.py
+│   ├── moe_kgc.py              # 主模型
+│   ├── encoders/
+│   │   ├── __init__.py
+│   │   ├── text_encoder.py
+│   │   ├── tabular_encoder.py
+│   │   └── structured_encoder.py
+│   ├── experts/
+│   │   ├── __init__.py
+│   │   ├── base_expert.py
+│   │   ├── action_expert.py
+│   │   ├── spatial_expert.py
+│   │   ├── temporal_expert.py
+│   │   ├── semantic_expert.py
+│   │   └── safety_expert.py
+│   ├── gating/
+│   │   ├── __init__.py
+│   │   └── adaptive_gating.py
+│   ├── graph_layers/
+│   │   ├── __init__.py
+│   │   ├── enhanced_gnn.py
+│   │   └── graph_fusion.py
+│   └── task_heads/
+│       ├── __init__.py
+│       ├── link_prediction.py
+│       ├── entity_classification.py
+│       └── relation_extraction.py
+│
+├── training/
+│   ├── __init__.py
+│   ├── trainer.py
+│   ├── losses.py
+│   └── metrics.py
+│
+├── evaluation/
+│   ├── __init__.py
+│   ├── evaluator.py
+│   └── baseline_comparison.py
+│
+├── utils/
+│   ├── __init__.py
+│   ├── logger.py
+│   ├── visualization.py
+│   └── helpers.py
+│
+├── scripts/
+│   ├── train.py
+│   ├── evaluate.py
+│   └── demo.py
+│
+└── tests/
+    ├── __init__.py
+    ├── test_models.py
+    ├── test_data_processing.py
+    └── test_training.py

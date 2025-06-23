@@ -1,0 +1,14 @@
+# 人体反应时间适配任务
+tasks:
+  - name: "reaction_time_adaptive_operation"
+    type: "human_factors"
+    parameters:
+      object: "dynamic_object"
+      target: "catching_position"
+    constraints:
+      - type: "response_time"        # 人机反应时间匹配
+      - type: "motion_prediction"    # 运动可预测性
+    safety_limits:
+      max_force: 12.0
+      reaction_time_threshold: 0.5   # 反应时间阈值(秒)
+      motion_prediction_error: 0.1   # 预测误差(m)

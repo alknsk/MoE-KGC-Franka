@@ -1,0 +1,13 @@
+# 递送任务
+tasks:
+  - name: "deliver_glass_to_user"
+    type: "delivery"
+    parameters:
+      object: "water_glass"
+      target: "user_hand"
+    constraints:
+      - type: "collision_free"
+      - type: "stable_movement"  # 稳定移动
+    safety_limits:
+      max_force: 20.0
+      velocity_limit: 0.3  # 速度限制(m/s)
