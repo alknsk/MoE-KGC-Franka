@@ -39,73 +39,83 @@ class PDFProcessor:
         
         return text
     
-    def extract_entities(self, text: str) -> Dict[str, List[Tuple[str, int, int]]]:
-        """从具有位置的文本中提取实体"""
-        entities = {entity_type: [] for entity_type in self.entity_patterns}
-        
+    def extract_entities(self, text: str) -> List[Dict[str, Any]]:
+        """从文本中提取实体 - 返回统一的字典格式"""
+        entities = []
+        entity_id = 0
+    
         for entity_type, pattern in self.entity_patterns.items():
             matches = re.finditer(pattern, text, re.IGNORECASE)
             for match in matches:
-                entities[entity_type].append((
-                    match.group(),
-                    match.start(),
-                    match.end()
-                ))
-        
-        return entities
+                entity = {
+                    'id': f"pdf_entity_{entity_type}_{entity_id}",
+                    'type': entity_type,
+                    'name': match.group(),
+                    'text': match.group(),
+                    'attributes': {
+                        'start_pos': match.start(),
+                        'end_pos': match.end(),
+                        'source': 'pdf'
+                    }
+                }
+                entities.append(entity)
+                entity_id += 1
     
-    def extract_relations(self, text: str, entities: Dict[str, List[Tuple[str, int, int]]]) -> List[Dict[str, Any]]:
-        """提取实体之间的关系"""
+        return entities
+
+    def extract_relations(self, text: str, entities: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
+        """提取实体之间的关系 - 使用新的实体格式"""
         relations = []
         sentences = text.split('.')
-        
+    
         for sent in sentences:
             sent_entities = []
-            for entity_type, entity_list in entities.items():
-                for entity, start, end in entity_list:
-                    if entity.lower() in sent.lower():
-                        sent_entities.append({
-                            'text': entity,
-                            'type': entity_type,
-                            'position': (start, end)
-                        })
-            
+            for entity in entities:
+                if entity['text'].lower() in sent.lower():
+                    sent_entities.append(entity)
+        
             # 在同一个句子中创建实体之间的关系
             for i in range(len(sent_entities)):
                 for j in range(i + 1, len(sent_entities)):
-                    relations.append({
-                        'head': sent_entities[i],
-                        'tail': sent_entities[j],
-                        'context': sent.strip()
-                    })
-        
-        return relations
+                    relation = {
+                        'head': sent_entities[i]['id'],
+                        'tail': sent_entities[j]['id'],
+                        'type': 'co_occurrence',
+                        'attributes': {
+                            'context': sent.strip()[:100]  # 限制上下文长度
+                        }
+                    }
+                    relations.append(relation)
     
+        return relations
+
     def process(self, pdf_path: str) -> Dict[str, Any]:
         """处理PDF文件，提取知识图谱元素"""
         # Extract text
         text = self.extract_text_from_pdf(pdf_path)
-        
+    
         # Clean text
         text = re.sub(r'\s+', ' ', text)
         text = re.sub(r'[^\w\s\.\,\;\:\!\?]', '', text)
-        
-        # Extract entities and relations
+    
+        # Extract entities and relations - 新格式
         entities = self.extract_entities(text)
         relations = self.extract_relations(text, entities)
-        
-        # Tokenize text
-        tokens = self.tokenizer(
-            text,
-            truncation=True,
-            max_length=512,
-            padding='max_length',
-            return_tensors='pt'
-        )
-        
+    
+        # Tokenize text（如果需要）
+        tokens = None
+        if hasattr(self, 'tokenizer'):
+            tokens = self.tokenizer(
+                text[:512],  # 限制长度
+                truncation=True,
+                max_length=512,
+                padding='max_length',
+                return_tensors='pt'
+            )
+    
         return {
-            'text': text,
-            'entities': entities,
+            'text': text[:1000],  # 限制文本长度避免太大
+            'entities': entities,  # 统一的列表格式
             'relations': relations,
             'tokens': tokens,
             'source': 'pdf',

@@ -4,243 +4,238 @@ from typing import Dict, List, Any, Union
 from pathlib import Path
 
 class YAMLProcessor:
-    """处理机器人任务与约束相关YAML配置文件的工具类"""
-
+    """Process YAML configuration files for robot tasks and constraints"""
+    
     def __init__(self):
-        # 定义任务schema，规定每个任务必须包含的字段及其类型
         self.task_schema = {
-            'name': str,           # 任务名称
-            'type': str,           # 任务类型
-            'parameters': dict,    # 任务参数
-            'constraints': list,   # 任务约束
-            'safety_limits': dict  # 安全限制
+            'name': str,
+            'type': str,
+            'parameters': dict,
+            'constraints': list,
+            'safety_limits': dict
         }
-
+    
     def load_yaml(self, yaml_path: str) -> Dict[str, Any]:
-        """加载YAML文件并返回数据字典
-        参数:
-            yaml_path: YAML文件路径
-        返回:
-            dict: 解析后的YAML数据
-        """
+        """Load YAML file"""
         with open(yaml_path, 'r') as f:
             data = yaml.safe_load(f)
         return data
-
+    
     def validate_task_definition(self, task: Dict[str, Any]) -> bool:
-        """校验单个任务定义是否符合schema要求
-        参数:
-            task: 单个任务的字典
-        返回:
-            bool: 是否符合schema
-        """
-        for key, expected_type in self.task_schema.items():
-            if key not in task:
-                print(f"缺少必要字段: {key}")
-                return False
-            if not isinstance(task[key], expected_type):
-                print(f"字段类型错误: {key} 应为 {expected_type}, 实际为 {type(task[key])}")
+        """Validate task definition against schema - 更宽松的验证"""
+        # 只检查必需字段
+        required_fields = ['name', 'type']
+        for field in required_fields:
+            if field not in task:
+                print(f"Missing required field: {field}")
                 return False
         return True
-
+    
     def extract_task_entities(self, data: Dict[str, Any]) -> List[Dict[str, Any]]:
-        """从YAML数据中提取任务实体
-        参数:
-            data: YAML数据字典
-        返回:
-            List[Dict]: 任务实体列表
-        """
+        """Extract task entities from YAML data"""
         entities = []
-
-        if 'tasks' in data:
+        
+        if 'tasks' in data and isinstance(data['tasks'], list):
             for task_id, task_def in enumerate(data['tasks']):
                 if self.validate_task_definition(task_def):
                     entity = {
-                        'id': f"task_{task_id}",          # 任务实体唯一标识
-                        'type': 'task',                   # 实体类型
-                        'name': task_def['name'],         # 任务名称
-                        'task_type': task_def['type'],    # 任务类型
-                        'attributes': {                   # 任务属性
-                            'parameters': task_def['parameters'],
-                            'constraints': task_def['constraints']
+                        'id': f"task_{task_def['name']}",  # 使用name作为ID
+                        'type': 'task',
+                        'name': task_def['name'],
+                        'task_type': task_def.get('type', 'unknown'),
+                        'attributes': {
+                            'parameters': task_def.get('parameters', {}),
+                            'constraints': task_def.get('constraints', []),
+                            'safety_limits': task_def.get('safety_limits', {})
                         }
                     }
                     entities.append(entity)
-
+                    print(f"提取任务实体: {entity['name']}")
+        
         return entities
-
+    
     def extract_constraint_entities(self, data: Dict[str, Any]) -> List[Dict[str, Any]]:
-        """从YAML数据中提取约束实体（包括任务内和全局约束）
-        参数:
-            data: YAML数据字典
-        返回:
-            List[Dict]: 约束实体列表
-        """
+        """Extract constraint entities from YAML data"""
         entities = []
         constraint_id = 0
-
-        # 提取每个任务下的约束
-        if 'tasks' in data:
+        
+        # Extract from tasks
+        if 'tasks' in data and isinstance(data['tasks'], list):
             for task in data['tasks']:
                 for constraint in task.get('constraints', []):
+                    constraint_type = constraint.get('type', 'unknown')
                     entity = {
-                        'id': f"constraint_{constraint_id}",  # 约束实体唯一标识
-                        'type': 'constraint',                 # 实体类型
-                        'name': constraint.get('name', f"constraint_{constraint_id}"),  # 约束名称
-                        'attributes': constraint              # 约束属性
+                        'id': f"constraint_{constraint_type}_{constraint_id}",
+                        'type': 'constraint',
+                        'name': constraint_type,
+                        'attributes': constraint
                     }
                     entities.append(entity)
                     constraint_id += 1
-
-        # 提取全局约束
+                    print(f"提取约束实体: {entity['name']}")
+        
+        # Extract global constraints
         if 'global_constraints' in data:
             for constraint in data['global_constraints']:
                 entity = {
-                    'id': f"constraint_{constraint_id}",
+                    'id': f"constraint_{constraint.get('name', constraint_id)}",
                     'type': 'constraint',
                     'name': constraint.get('name', f"constraint_{constraint_id}"),
                     'attributes': constraint
                 }
                 entities.append(entity)
                 constraint_id += 1
-
+        
         return entities
-
+    
     def extract_safety_entities(self, data: Dict[str, Any]) -> List[Dict[str, Any]]:
-        """从YAML数据中提取安全限制相关实体
-        参数:
-            data: YAML数据字典
-        返回:
-            List[Dict]: 安全限制实体列表
-        """
+        """Extract safety-related entities from YAML data"""
         entities = []
-
+        
+        # 从任务中提取safety_limits
+        if 'tasks' in data and isinstance(data['tasks'], list):
+            for task in data['tasks']:
+                if 'safety_limits' in task:
+                    for limit_name, limit_value in task['safety_limits'].items():
+                        entity = {
+                            'id': f"safety_{limit_name}_{task['name']}",
+                            'type': 'safety',
+                            'name': f"{limit_name}",
+                            'attributes': {
+                                'value': limit_value,
+                                'unit': self.infer_unit(limit_name),
+                                'task': task['name']
+                            }
+                        }
+                        entities.append(entity)
+                        print(f"提取安全实体: {entity['name']}")
+        
+        # 全局safety_limits
         if 'safety_limits' in data:
             for limit_name, limit_value in data['safety_limits'].items():
                 entity = {
-                    'id': f"safety_{limit_name}",      # 安全限制实体唯一标识
-                    'type': 'safety_limit',            # 实体类型
-                    'name': limit_name,                # 限制名称
+                    'id': f"safety_{limit_name}",
+                    'type': 'safety',
+                    'name': limit_name,
                     'attributes': {
-                        'value': limit_value,          # 限制值
-                        'unit': self.infer_unit(limit_name)  # 推断单位
+                        'value': limit_value,
+                        'unit': self.infer_unit(limit_name)
                     }
                 }
                 entities.append(entity)
-
+        
         return entities
-
-    def extract_hierarchical_relations(self, data: Dict[str, Any]) -> List[Dict[str, Any]]:
-        """从YAML结构中提取层级关系（如任务层级、依赖关系）
-        参数:
-            data: YAML数据字典
-        返回:
-            List[Dict]: 层级关系列表
-        """
+    
+    def extract_relations(self, data: Dict[str, Any], entities: Dict[str, List]) -> List[Dict[str, Any]]:
+        """提取实体之间的关系 - 使用正确的实体ID"""
         relations = []
-
-        # 任务层级关系
-        if 'task_hierarchy' in data:
-            for parent, children in data['task_hierarchy'].items():
-                for child in children:
+    
+        # 创建ID映射表，方便查找
+        entity_id_map = {}
+        for entity_type, entity_list in entities.items():
+            for entity in entity_list:
+                # 使用实体的name作为key，完整ID作为value
+                entity_id_map[entity['name']] = entity['id']
+    
+        # 任务与约束的关系
+        if 'tasks' in data and isinstance(data['tasks'], list):
+            for task in data['tasks']:
+                task_name = task['name']
+                task_id = entity_id_map.get(task_name, f"task_{task_name}")
+            
+                # 任务与约束的关系
+                constraint_index = 0
+                for constraint in task.get('constraints', []):
+                    constraint_type = constraint.get('type', 'unknown')
+                    # 使用正确的约束ID格式
+                    constraint_id = f"constraint_{constraint_type}_{constraint_index}"
+                
+                    # 查找实际的约束实体ID
+                    for c_entity in entities.get('constraint', []):
+                        if c_entity['name'] == constraint_type:
+                            constraint_id = c_entity['id']
+                            break
+                
                     relation = {
-                        'head': parent,      # 父任务
-                        'tail': child,       # 子任务
-                        'type': 'subtask_of',# 关系类型：子任务
+                        'head': task_id,
+                        'tail': constraint_id,
+                        'type': 'has_constraint',
                         'attributes': {}
                     }
                     relations.append(relation)
-
-        # 任务依赖关系
-        if 'dependencies' in data:
-            for task, deps in data['dependencies'].items():
-                for dep in deps:
-                    relation = {
-                        'head': task,        # 当前任务
-                        'tail': dep,         # 依赖的任务
-                        'type': 'depends_on',# 关系类型：依赖
-                        'attributes': {}
-                    }
-                    relations.append(relation)
-
+                    constraint_index += 1
+            
+                # 任务与安全限制的关系
+                if 'safety_limits' in task:
+                    for limit_name in task['safety_limits']:
+                        # 使用正确的安全实体ID
+                        safety_id = f"safety_{limit_name}_{task_name}"
+                    
+                        # 查找实际的安全实体ID
+                        for s_entity in entities.get('safety', []):
+                            if s_entity['name'] == limit_name and task_name in s_entity['id']:
+                                safety_id = s_entity['id']
+                                break
+                    
+                        relation = {
+                            'head': task_id,
+                            'tail': safety_id,
+                            'type': 'has_safety_limit',
+                            'attributes': {}
+                        }
+                        relations.append(relation)
+    
         return relations
-
-    def extract_configuration_data(self, data: Dict[str, Any]) -> Dict[str, Any]:
-        """提取配置参数（如机器人、环境、控制参数等）
-        参数:
-            data: YAML数据字典
-        返回:
-            dict: 配置参数
-        """
-        config = {}
-
-        # 机器人配置
-        if 'robot_config' in data:
-            config['robot'] = data['robot_config']
-
-        # 环境配置
-        if 'environment' in data:
-            config['environment'] = data['environment']
-
-        # 控制参数
-        if 'control_params' in data:
-            config['control'] = data['control_params']
-
-        return config
-
+    
     def infer_unit(self, param_name: str) -> str:
-        """根据参数名推断物理单位
-        参数:
-            param_name: 参数名称
-        返回:
-            str: 单位字符串
-        """
+        """Infer unit from parameter name"""
         unit_mapping = {
-            'force': 'N',           # 力，牛顿
-            'torque': 'Nm',         # 力矩，牛·米
-            'velocity': 'm/s',      # 速度，米每秒
-            'acceleration': 'm/s²', # 加速度，米每二次方秒
-            'position': 'm',        # 位置，米
-            'angle': 'rad'          # 角度，弧度
+            'force': 'N',
+            'torque': 'Nm',
+            'velocity': 'm/s',
+            'acceleration': 'm/s²',
+            'position': 'm',
+            'angle': 'rad',
+            'limit': 'm/s²'  # for acceleration_limit
         }
-
+        
         for key, unit in unit_mapping.items():
             if key in param_name.lower():
                 return unit
         return ''
-
+    
     def process(self, yaml_path: str) -> Dict[str, Any]:
-        """主处理流程：加载YAML文件，提取实体、关系和配置信息
-        参数:
-            yaml_path: YAML文件路径
-        返回:
-            dict: 包含实体、关系、配置等知识图谱元素
-        """
-        # 加载YAML数据
+        """Process YAML file and extract knowledge graph elements"""
+        print(f"\n处理YAML文件: {yaml_path}")
+        
+        # Load YAML data
         data = self.load_yaml(yaml_path)
-
-        # 提取各类实体
+        
+        # Extract entities
         task_entities = self.extract_task_entities(data)
         constraint_entities = self.extract_constraint_entities(data)
         safety_entities = self.extract_safety_entities(data)
-
-        # 提取层级和依赖关系
-        hierarchical_relations = self.extract_hierarchical_relations(data)
-
-        # 提取配置参数
-        configuration = self.extract_configuration_data(data)
-
+        
+        # 统一实体格式
+        all_entities = []
+        all_entities.extend([{'type': 'task', **e} for e in task_entities])
+        all_entities.extend([{'type': 'constraint', **e} for e in constraint_entities])
+        all_entities.extend([{'type': 'safety', **e} for e in safety_entities])
+        
+        # Extract relations
+        entities_dict = {
+            'task': task_entities,
+            'constraint': constraint_entities,
+            'safety': safety_entities
+        }
+        relations = self.extract_relations(data, entities_dict)
+        
+        print(f"提取到 {len(all_entities)} 个实体, {len(relations)} 个关系")
+        
         return {
-            'entities': {
-                'tasks': task_entities,
-                'constraints': constraint_entities,
-                'safety': safety_entities
-            },
-            'relations': {
-                'hierarchical': hierarchical_relations
-            },
-            'configuration': configuration,
-            'source': 'yaml',      # 数据来源
-            'path': yaml_path,     # 原始文件路径
-            'raw_data': data       # 原始数据（字典）
+            'entities': all_entities,  # 统一格式的实体列表
+            'relations': relations,
+            'source': 'yaml',
+            'path': yaml_path,
+            'raw_data': data
         }

@@ -12,28 +12,28 @@ from .preprocessors import PDFProcessor, CSVProcessor, YAMLProcessor
 from .dataset import FrankaKGDataset
 
 class KGDataLoader:
-    """知识图谱构建的主数据加载器"""
-
+    """Knowledge Graph Data Loader for MoE-KGC"""
+    
     def __init__(self, config):
-        # 保存配置对象
         self.config = config
-        # 初始化各类文件处理器
+        
+        # 初始化处理器 - 这是关键！
         self.pdf_processor = PDFProcessor()
         self.csv_processor = CSVProcessor()
         self.yaml_processor = YAMLProcessor()
-        # 存储实体、关系和图结构
+        
+        # 初始化其他属性
+        self.graph = nx.DiGraph()
         self.entities = {}
         self.relations = []
-        self.graph = nx.MultiDiGraph()
         
+        print("KGDataLoader初始化完成")
+        print(f"  PDF处理器: {self.pdf_processor}")
+        print(f"  CSV处理器: {self.csv_processor}")
+        print(f"  YAML处理器: {self.yaml_processor}")
+    
     def load_data_from_directory(self, data_dir: str) -> Dict[str, Any]:
-        """
-        从指定目录加载所有原始数据文件（PDF/CSV/YAML）
-        参数:
-            data_dir: 数据目录路径
-        返回:
-            dict: 包含所有类型数据的字典
-        """
+        """Load all data from directory"""
         data_dir = Path(data_dir)
         all_data = {
             'pdf_data': [],
@@ -41,154 +41,212 @@ class KGDataLoader:
             'yaml_data': []
         }
         
-        # 处理PDF文件
+        print(f"\n开始加载数据目录: {data_dir}")
+        
+        # Process PDF files
         pdf_dir = data_dir / 'pdfs'
         if pdf_dir.exists():
-            for pdf_file in data_dir.glob("*.pdf"):
-                print(f"Processing PDF: {pdf_file}")
-                pdf_data = self.pdf_processor.process(str(pdf_file))
-                all_data['pdf_data'].append(pdf_data)
+            pdf_files = list(pdf_dir.glob("*.pdf"))
+            print(f"找到 {len(pdf_files)} 个PDF文件")
+            for pdf_file in pdf_files:
+                try:
+                    print(f"  处理: {pdf_file.name}")
+                    pdf_data = self.pdf_processor.process(str(pdf_file))
+                    if pdf_data:
+                        all_data['pdf_data'].append(pdf_data)
+                        print(f"    ✓ 成功")
+                except Exception as e:
+                    print(f"    ✗ 失败: {e}")
         
-        # 处理CSV文件
+        # Process CSV files  
         csv_dir = data_dir / 'csvs'
         if csv_dir.exists():
-            for csv_file in data_dir.glob("*.csv"):
-                print(f"Processing CSV: {csv_file}")
-                csv_data = self.csv_processor.process(str(csv_file))
-                all_data['csv_data'].append(csv_data)
+            csv_files = list(csv_dir.glob("*.csv"))
+            print(f"\n找到 {len(csv_files)} 个CSV文件")
+            # 只处理前几个避免太多输出
+            for i, csv_file in enumerate(csv_files[:5]):
+                try:
+                    print(f"  处理: {csv_file.name}")
+                    csv_data = self.csv_processor.process(str(csv_file))
+                    if csv_data:
+                        all_data['csv_data'].append(csv_data)
+                        # 打印实体数量
+                        entities = csv_data.get('entities', {})
+                        if isinstance(entities, dict):
+                            total = sum(len(v) for v in entities.values())
+                        else:
+                            total = len(entities)
+                        print(f"    ✓ 成功 - {total} 个实体")
+                except Exception as e:
+                    print(f"    ✗ 失败: {e}")
+            
+            # 处理剩余的CSV文件（不打印详情）
+            for csv_file in csv_files[5:]:
+                try:
+                    csv_data = self.csv_processor.process(str(csv_file))
+                    if csv_data:
+                        all_data['csv_data'].append(csv_data)
+                except:
+                    pass
         
-        # 处理YAML文件
+        # Process YAML files
         yaml_dir = data_dir / 'yamls'
         if yaml_dir.exists():
-            for yaml_file in data_dir.glob("*.yaml"):
-                print(f"Processing YAML: {yaml_file}")
-                yaml_data = self.yaml_processor.process(str(yaml_file))
-                all_data['yaml_data'].append(yaml_data)
-
-            # 也查找 .yml 扩展名
-            for yaml_file in yaml_dir.glob("*.yml"):
-                print(f"Processing YAML: {yaml_file}")
-                yaml_data = self.yaml_processor.process(str(yaml_file))
-                all_data['yaml_data'].append(yaml_data)
+            yaml_files = list(yaml_dir.glob("*.yaml")) + list(yaml_dir.glob("*.yml"))
+            print(f"\n找到 {len(yaml_files)} 个YAML文件")
+            for yaml_file in yaml_files:
+                try:
+                    print(f"  处理: {yaml_file.name}")
+                    yaml_data = self.yaml_processor.process(str(yaml_file))
+                    if yaml_data:
+                        all_data['yaml_data'].append(yaml_data)
+                        entities = yaml_data.get('entities', [])
+                        relations = yaml_data.get('relations', [])
+                        print(f"    ✓ 成功 - {len(entities)} 个实体, {len(relations)} 个关系")
+                except Exception as e:
+                    print(f"    ✗ 失败: {e}")
+        
+        print(f"\n数据加载完成:")
+        print(f"  PDF: {len(all_data['pdf_data'])} 个文件")
+        print(f"  CSV: {len(all_data['csv_data'])} 个文件")
+        print(f"  YAML: {len(all_data['yaml_data'])} 个文件")
         
         return all_data
     
-    def merge_entities(self, all_data: Dict[str, List[Dict]]) -> Dict[str, Any]:
-        """
-        合并不同来源的数据实体，统一格式
-        参数:
-            all_data: 各类型原始数据
-        返回:
-            dict: 合并后的实体字典，按类型分类
-        """
-        merged_entities = {
-            'action': [],
-            'object': [],
-            'task': [],
-            'constraint': [],
-            'safety': [],
-            'spatial': [],
-            'temporal': []
-        }
-        
-        entity_id_counter = 0
-        
-        # 合并PDF实体
-        for pdf_data in all_data['pdf_data']:
-            for entity_type, entity_list in pdf_data.get('entities', {}).items():
-                if entity_type in merged_entities:
-                    for entity in entity_list:
-                        merged_entities[entity_type].append({
-                            'id': f"entity_{entity_id_counter}",
-                            'text': entity[0] if isinstance(entity, tuple) else entity,
-                            'source': 'pdf',
-                            'type': entity_type
-                        })
-                        entity_id_counter += 1
-        
-        # 合并CSV实体
-        for csv_data in all_data['csv_data']:
-            entities = csv_data.get('entities', {})
-            for entity in entities.get('actions', []):
-                merged_entities['action'].append({
-                    'id': entity['id'],
-                    'name': entity['name'],
-                    'attributes': entity['attributes'],
-                    'source': 'csv',
-                    'type': 'action'
-                })
+    def merge_entities(self, all_data: Dict[str, List]) -> Dict[str, List]:
+        """Merge entities from different sources - 更健壮的版本"""
+        merged_entities = {}
+    
+        # 处理不同数据源
+        for data_type in ['csv_data', 'yaml_data', 'pdf_data']:
+            for data_item in all_data.get(data_type, []):
+                entities = data_item.get('entities', [])
             
-            for entity in entities.get('objects', []):
-                merged_entities['object'].append({
-                    'id': entity['id'],
-                    'name': entity['name'],
-                    'attributes': entity.get('attributes', {}),
-                    'source': 'csv',
-                    'type': 'object'
-                })
-        
-        # 合并YAML实体
-        for yaml_data in all_data['yaml_data']:
-            entities = yaml_data.get('entities', {})
-            for entity in entities.get('tasks', []):
-                merged_entities['task'].append(entity)
+                # 处理统一的列表格式（新格式）
+                if isinstance(entities, list):
+                    for entity in entities:
+                        # 确保是字典格式
+                        if isinstance(entity, dict):
+                            entity_type = entity.get('type', 'unknown')
+                            if entity_type not in merged_entities:
+                                merged_entities[entity_type] = []
+                            merged_entities[entity_type].append(entity)
+                        elif isinstance(entity, tuple) and len(entity) >= 3:
+                            # 兼容旧的tuple格式
+                            entity_dict = {
+                                'id': f"legacy_entity_{len(merged_entities)}",
+                                'text': entity[0],
+                                'start': entity[1],
+                                'end': entity[2],
+                                'type': 'unknown'
+                            }
+                            if 'unknown' not in merged_entities:
+                                merged_entities['unknown'] = []
+                            merged_entities['unknown'].append(entity_dict)
             
-            for entity in entities.get('constraints', []):
-                merged_entities['constraint'].append(entity)
-            
-            for entity in entities.get('safety', []):
-                merged_entities['safety'].append(entity)
-        
+                # 处理按类型分组的字典格式（旧格式）
+                elif isinstance(entities, dict):
+                    for entity_type, entity_list in entities.items():
+                        # 映射实体类型
+                        mapped_type = {
+                            'tasks': 'task',
+                            'actions': 'action',
+                            'objects': 'object',
+                            'constraints': 'constraint',
+                            'safety': 'safety'
+                        }.get(entity_type, entity_type)
+                    
+                        if mapped_type not in merged_entities:
+                            merged_entities[mapped_type] = []
+                    
+                        if isinstance(entity_list, list):
+                            for item in entity_list:
+                                # 处理字典格式
+                                if isinstance(item, dict):
+                                    merged_entities[mapped_type].append(item)
+                                # 处理tuple格式（PDF的旧格式）
+                                elif isinstance(item, tuple) and len(item) >= 3:
+                                    entity_dict = {
+                                        'id': f"{mapped_type}_{item[0]}_{len(merged_entities[mapped_type])}",
+                                        'type': mapped_type,
+                                        'text': item[0],
+                                        'name': item[0],
+                                        'attributes': {
+                                            'start_pos': item[1],
+                                            'end_pos': item[2]
+                                        }
+                                    }
+                                    merged_entities[mapped_type].append(entity_dict)
+    
+        # 去重
+        for entity_type in merged_entities:
+            seen = set()
+            unique = []
+            for entity in merged_entities[entity_type]:
+                if isinstance(entity, dict):
+                    entity_id = entity.get('id', str(entity.get('name', str(entity))))
+                    if entity_id not in seen:
+                        seen.add(entity_id)
+                        unique.append(entity)
+            merged_entities[entity_type] = unique
+    
+        print(f"\n合并后的实体统计:")
+        for entity_type, entities in merged_entities.items():
+            print(f"  {entity_type}: {len(entities)} 个")
+    
         return merged_entities
     
-    def merge_relations(self, all_data: Dict[str, List[Dict]]) -> List[Dict[str, Any]]:
-        """
-        合并不同来源的数据关系，统一格式
-        参数:
-            all_data: 各类型原始数据
-        返回:
-            list: 合并后的关系列表
-        """
-        merged_relations = []
-        
-        # 合并PDF关系
-        for pdf_data in all_data['pdf_data']:
-            for relation in pdf_data.get('relations', []):
-                merged_relations.append({
-                    'head': relation['head']['text'],
-                    'tail': relation['tail']['text'],
-                    'type': 'contextual',
-                    'context': relation.get('context', ''),
-                    'source': 'pdf'
-                })
-        
-        # 合并CSV关系
-        for csv_data in all_data['csv_data']:
-            relations = csv_data.get('relations', {})
+    def merge_relations(self, all_data: Dict[str, List]) -> List[Dict[str, Any]]:
+        """Merge relations from different sources"""
+        all_relations = []
+    
+        # 处理不同数据源
+        for data_type in ['csv_data', 'yaml_data', 'pdf_data']:
+            for data_item in all_data.get(data_type, []):
+                relations = data_item.get('relations', [])
             
-            for relation in relations.get('temporal', []):
-                merged_relations.append({
-                    **relation,
-                    'source': 'csv'
-                })
+                # 如果relations是列表（统一格式）
+                if isinstance(relations, list):
+                    all_relations.extend(relations)
             
-            for relation in relations.get('interactions', []):
-                merged_relations.append({
-                    **relation,
-                    'source': 'csv'
-                })
-        
-        # 合并YAML关系
-        for yaml_data in all_data['yaml_data']:
-            relations = yaml_data.get('relations', {})
-            
-            for relation in relations.get('hierarchical', []):
-                merged_relations.append({
-                    **relation,
-                    'source': 'yaml'
-                })
-        
-        return merged_relations
+                # 如果relations是字典（按类型分组）
+                elif isinstance(relations, dict):
+                    for rel_type, rel_list in relations.items():
+                        if isinstance(rel_list, list):
+                            # 为每个关系添加类型信息（如果还没有）
+                            for rel in rel_list:
+                                if isinstance(rel, dict) and 'type' not in rel:
+                                    rel['type'] = rel_type
+                            all_relations.extend(rel_list)
+    
+        # 去重（基于head、tail和type）
+        seen = set()
+        unique_relations = []
+        for rel in all_relations:
+            if isinstance(rel, dict):
+                # 创建唯一标识
+                rel_key = (
+                    rel.get('head', ''), 
+                    rel.get('tail', ''),
+                    rel.get('type', '')
+                )
+                if rel_key not in seen:
+                    seen.add(rel_key)
+                    unique_relations.append(rel)
+    
+        print(f"\n合并后的关系数量: {len(unique_relations)}")
+    
+        # 统计关系类型
+        rel_types = {}
+        for rel in unique_relations:
+            rel_type = rel.get('type', 'unknown')
+            rel_types[rel_type] = rel_types.get(rel_type, 0) + 1
+    
+        print("关系类型分布:")
+        for rel_type, count in rel_types.items():
+            print(f"  {rel_type}: {count} 个")
+    
+        return unique_relations
     
     def build_knowledge_graph(self, entities: Dict[str, List], relations: List[Dict]) -> nx.MultiDiGraph:
         """
