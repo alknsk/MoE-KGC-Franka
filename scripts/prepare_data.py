@@ -60,8 +60,8 @@ def organize_data_files(raw_data_dir: str, output_dir: str, split_ratio: tuple =
         ('YAML', yaml_files, 'yamls')
     ]:
         splits = split_files(files, split_ratio)
-        for split_name, split_files in splits.items():
-            for file in split_files:
+        for split_name, split_file_list in splits.items():
+            for file in split_file_list:
                 dest = out_path / split_name / subdir / file.name
                 shutil.copy2(file, dest)
                 print(f"复制 {file.name} 到 {split_name}/{subdir}")

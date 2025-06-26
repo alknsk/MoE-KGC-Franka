@@ -42,22 +42,34 @@ class KGDataLoader:
         }
         
         # 处理PDF文件
-        for pdf_file in data_dir.glob("*.pdf"):
-            print(f"Processing PDF: {pdf_file}")
-            pdf_data = self.pdf_processor.process(str(pdf_file))
-            all_data['pdf_data'].append(pdf_data)
+        pdf_dir = data_dir / 'pdfs'
+        if pdf_dir.exists():
+            for pdf_file in data_dir.glob("*.pdf"):
+                print(f"Processing PDF: {pdf_file}")
+                pdf_data = self.pdf_processor.process(str(pdf_file))
+                all_data['pdf_data'].append(pdf_data)
         
         # 处理CSV文件
-        for csv_file in data_dir.glob("*.csv"):
-            print(f"Processing CSV: {csv_file}")
-            csv_data = self.csv_processor.process(str(csv_file))
-            all_data['csv_data'].append(csv_data)
+        csv_dir = data_dir / 'csvs'
+        if csv_dir.exists():
+            for csv_file in data_dir.glob("*.csv"):
+                print(f"Processing CSV: {csv_file}")
+                csv_data = self.csv_processor.process(str(csv_file))
+                all_data['csv_data'].append(csv_data)
         
         # 处理YAML文件
-        for yaml_file in data_dir.glob("*.yaml"):
-            print(f"Processing YAML: {yaml_file}")
-            yaml_data = self.yaml_processor.process(str(yaml_file))
-            all_data['yaml_data'].append(yaml_data)
+        yaml_dir = data_dir / 'yamls'
+        if yaml_dir.exists():
+            for yaml_file in data_dir.glob("*.yaml"):
+                print(f"Processing YAML: {yaml_file}")
+                yaml_data = self.yaml_processor.process(str(yaml_file))
+                all_data['yaml_data'].append(yaml_data)
+
+            # 也查找 .yml 扩展名
+            for yaml_file in yaml_dir.glob("*.yml"):
+                print(f"Processing YAML: {yaml_file}")
+                yaml_data = self.yaml_processor.process(str(yaml_file))
+                all_data['yaml_data'].append(yaml_data)
         
         return all_data
     

@@ -48,11 +48,13 @@ pip install -e .
 ### 1.1 数据准备与预处理
 ```bash
 # 执行数据处理脚本
-python scripts/prepare_data.py \
+python MoE_franka/scripts/prepare_data.py \
     --raw_data ./raw_data \
     --output_dir ./data \
     --split_ratio 0.7 0.15 0.15 \
-    --validate --preprocess
+    --validate --preprocess \
+    --config /home2/yanghaochen/MoE_franka/config/default_config.yaml
+# 注意：这一操作需要连接VPN！
 ```
 ### 处理内容：
 自动扫描raw_data目录下的 PDF/CSV/YAML 文件
