@@ -1,0 +1,12 @@
+# 精细操作任务
+tasks:
+  - name: "plug_in_socket"
+    type: "manipulation"
+    parameters:
+      object: "electrical_plug"
+      target: "socket"
+    constraints:
+      - type: "collision_free"
+      - type: "force_tracking"  # 力跟踪控制
+    safety_limits:
+      max_force: 10.0

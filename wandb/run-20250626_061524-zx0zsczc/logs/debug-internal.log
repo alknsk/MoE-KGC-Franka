@@ -1,0 +1,3 @@
+{"time":"2025-06-26T06:15:24.735250934Z","level":"INFO","msg":"stream: starting","core version":"0.20.1","symlink path":"/home2/yanghaochen/MoE_franka/wandb/run-20250626_061524-zx0zsczc/logs/debug-core.log"}
+{"time":"2025-06-26T06:15:54.946834212Z","level":"INFO","msg":"api: retrying error","error":"Post \"https://api.wandb.ai/graphql\": net/http: request canceled while waiting for connection (Client.Timeout exceeded while awaiting headers)"}
+{"time":"2025-06-26T06:16:27.401035806Z","level":"INFO","msg":"api: retrying error","error":"Post \"https://api.wandb.ai/graphql\": net/http: request canceled while waiting for connection (Client.Timeout exceeded while awaiting headers)"}

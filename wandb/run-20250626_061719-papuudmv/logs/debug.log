@@ -1,0 +1,38 @@
+2025-06-26 06:17:19,771 INFO    MainThread:3840526 [wandb_setup.py:_flush():81] Current SDK version is 0.20.1
+2025-06-26 06:17:19,772 INFO    MainThread:3840526 [wandb_setup.py:_flush():81] Configure stats pid to 3840526
+2025-06-26 06:17:19,772 INFO    MainThread:3840526 [wandb_setup.py:_flush():81] Loading settings from /home2/yanghaochen/.config/wandb/settings
+2025-06-26 06:17:19,772 INFO    MainThread:3840526 [wandb_setup.py:_flush():81] Loading settings from /home2/yanghaochen/MoE_franka/wandb/settings
+2025-06-26 06:17:19,772 INFO    MainThread:3840526 [wandb_setup.py:_flush():81] Loading settings from environment variables
+2025-06-26 06:17:19,772 INFO    MainThread:3840526 [wandb_init.py:setup_run_log_directory():703] Logging user logs to /home2/yanghaochen/MoE_franka/wandb/run-20250626_061719-papuudmv/logs/debug.log
+2025-06-26 06:17:19,772 INFO    MainThread:3840526 [wandb_init.py:setup_run_log_directory():704] Logging internal logs to /home2/yanghaochen/MoE_franka/wandb/run-20250626_061719-papuudmv/logs/debug-internal.log
+2025-06-26 06:17:19,772 INFO    MainThread:3840526 [wandb_init.py:init():831] calling init triggers
+2025-06-26 06:17:19,772 INFO    MainThread:3840526 [wandb_init.py:init():836] wandb.init called with sweep_config: {}
+config: {'name': 'MoE-KGC-Franka', 'hidden_dim': 768, 'num_experts': 5, 'expert_hidden_dim': 512, 'num_heads': 12, 'dropout_rate': 0.1, 'activation': 'gelu', 'experts': {'action_expert': ExpertConfig(hidden_dims=[512, 256], use_attention=True, dropout_rate=0.1), 'spatial_expert': ExpertConfig(hidden_dims=[512, 256], use_attention=True, dropout_rate=0.1), 'temporal_expert': ExpertConfig(hidden_dims=[512, 256], use_attention=True, dropout_rate=0.1), 'semantic_expert': ExpertConfig(hidden_dims=[512, 256], use_attention=True, dropout_rate=0.1), 'safety_expert': ExpertConfig(hidden_dims=[512, 256], use_attention=True, dropout_rate=0.1)}, 'gating': GatingConfig(temperature=1.0, noise_std=0.1, top_k=2, load_balancing_weight=0.01), 'graph': GraphConfig(num_layers=3, aggregation='mean', use_edge_features=True, edge_hidden_dim=128), 'training': TrainingConfig(batch_size=32, learning_rate=0.0001, weight_decay='1e-5', epochs=100, gradient_clip=1.0, warmup_steps=1000, scheduler='cosine'), 'data': DataConfig(max_seq_length=512, vocab_size=30522, num_relations=50, num_entity_types=20), 'franka': FrankaConfig(joint_dim=7, gripper_dim=2, force_torque_dim=6, workspace_bounds={'x': [-0.855, 0.855], 'y': [-0.855, 0.855], 'z': [0.0, 1.19]}), 'paths': {'data_dir': './data/raw_data', 'processed_dir': './data/processed', 'model_dir': './checkpoints', 'log_dir': './logs'}, 'evaluation': {'metrics': ['accuracy', 'f1', 'mrr', 'hits@k'], 'k_values': [1, 3, 10], 'save_predictions': True}, '_wandb': {}}
+2025-06-26 06:17:19,772 INFO    MainThread:3840526 [wandb_init.py:init():872] starting backend
+2025-06-26 06:17:19,982 INFO    MainThread:3840526 [wandb_init.py:init():875] sending inform_init request
+2025-06-26 06:17:19,985 INFO    MainThread:3840526 [wandb_init.py:init():883] backend started and connected
+2025-06-26 06:17:19,987 INFO    MainThread:3840526 [wandb_init.py:init():956] updated telemetry
+2025-06-26 06:17:19,994 INFO    MainThread:3840526 [wandb_init.py:init():980] communicating run to backend with 90.0 second timeout
+2025-06-26 06:17:31,223 WARNING MainThread:3840526 [wandb_init.py:init():1613] [no run ID] interrupted
+Traceback (most recent call last):
+  File "/home2/yanghaochen/anaconda3/envs/franka/lib/python3.12/site-packages/wandb/sdk/wandb_init.py", line 1609, in init
+    return wi.init(run_settings, run_config, run_printer)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home2/yanghaochen/anaconda3/envs/franka/lib/python3.12/site-packages/wandb/sdk/wandb_init.py", line 999, in init
+    result = wait_with_progress(
+             ^^^^^^^^^^^^^^^^^^^
+  File "/home2/yanghaochen/anaconda3/envs/franka/lib/python3.12/site-packages/wandb/sdk/mailbox/wait_with_progress.py", line 24, in wait_with_progress
+    return wait_all_with_progress(
+           ^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home2/yanghaochen/anaconda3/envs/franka/lib/python3.12/site-packages/wandb/sdk/mailbox/wait_with_progress.py", line 87, in wait_all_with_progress
+    return asyncio_compat.run(progress_loop_with_timeout)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home2/yanghaochen/anaconda3/envs/franka/lib/python3.12/site-packages/wandb/sdk/lib/asyncio_compat.py", line 30, in run
+    return future.result()
+           ^^^^^^^^^^^^^^^
+  File "/home2/yanghaochen/anaconda3/envs/franka/lib/python3.12/concurrent/futures/_base.py", line 451, in result
+    self._condition.wait(timeout)
+  File "/home2/yanghaochen/anaconda3/envs/franka/lib/python3.12/threading.py", line 355, in wait
+    waiter.acquire()
+KeyboardInterrupt
+2025-06-26 06:17:31,994 INFO    MsgRouterThr:3840526 [mailbox.py:close():129] [no run ID] Closing mailbox, abandoning 2 handles.

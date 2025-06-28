@@ -1,0 +1,14 @@
+# 力觉交互学习任务
+tasks:
+  - name: "force_learning_human_robot_collaboration"
+    type: "skill_transfer"
+    parameters:
+      object: "training_model"
+      target: "demonstration_position"
+    constraints:
+      - type: "haptic_teaching"      # 触觉示教模式
+      - type: "learning_rate"        # 学习速率适配
+    safety_limits:
+      max_force: 8.0
+      teaching_force: 5.0            # 示教力限制(N)
+      learning_iterations: 10         # 最大学习迭代次数

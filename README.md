@@ -1,6 +1,6 @@
-# MoE-KGC-Franka: 人机交互中用于知识图谱构建的专家混合模型
+# MoE-KGC-Franka: 基于专家混合模型进行Franka人机交互知识图谱构建
 
-本项目实现了一种新颖的专家混合（MoE）模型，用于在Franka机器人人机交互的背景下，从多模态数据中构建知识图谱。
+本项目实现了一种新颖的专家混合（MoE）模型，用于在Franka机器人人机交互的背景下，从多模态数据中构建知识图谱。这一技术将为Franka机械臂在具身智能领域的应用提供全新范式。
 
 
 ## 特性
@@ -25,8 +25,8 @@
 ### 安装步骤
 ```bash
 # 克隆项目仓库
-git clone https://github.com/yourusername/moe-kgc-franka.git
-cd moe-kgc-franka
+git clone https://github.com/alknsk/MoE-KGC-Franka 
+cd MoE-franka
 
 # 创建虚拟环境（Linux/Mac）
 python -m venv venv
@@ -64,6 +64,7 @@ python MoE_franka/scripts/prepare_data.py \
 ### 1.2 模型训练
 ```bash
 # 基础训练命令
+cd /home2/yanghaochen/MoE_franka
 python scripts/train_e2e.py \
     --data_dir ./data \
     --task link_prediction \
@@ -71,7 +72,8 @@ python scripts/train_e2e.py \
     --batch_size 32 \
     --lr 0.0001 \
     --exp_name my_first_experiment \
-    --use_wandb
+    --use_wandb \
+    --config config/default_config.yaml
 ```
 ### 结果查看
 ```bash

@@ -1,0 +1,11 @@
+# 安全与应急任务
+tasks:
+  - name: "emergency_stop_demonstration"
+    type: "safety"
+    parameters:
+      object: "emergency_button"
+      target: "pressed_state"
+    constraints:
+      - type: "response_time"  # 响应时间约束
+    safety_limits:
+      stop_force: 100.0  # 制动力(N)

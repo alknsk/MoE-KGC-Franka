@@ -1,0 +1,13 @@
+# 精细操作任务
+tasks:
+  - name: "screw_assembly"
+    type: "assembly"
+    parameters:
+      object: "screw"
+      target: "hole"
+    constraints:
+      - type: "collision_free"
+      - type: "precision_positioning"  # 精确定位
+    safety_limits:
+      max_force: 15.0
+      max_torque: 5.0  # 增加扭矩限制

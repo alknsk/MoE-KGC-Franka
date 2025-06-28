@@ -151,6 +151,36 @@ class FrankaKGDataset(Dataset):
             'edge_features': self.features['edge_features']
         }
         
+        # ----------- 新增：三模态占位 -----------
+        # 假设 hidden_dim = self.config.hidden_dim，seq_len = 32，cat_dim = 4
+        hidden_dim = getattr(self.config, 'hidden_dim', 768)
+        seq_len = 128
+        cat_dim = 4
+        task_dim = 256
+        constraint_dim = 256
+        safety_dim = 256
+
+        # 文本模态
+        batch_data['text_inputs'] = {
+            'input_ids': torch.zeros(1, seq_len, dtype=torch.long),
+            'attention_mask': torch.ones(1, seq_len, dtype=torch.long)
+        }
+        # 表格模态 numerical_features=['joint_positions', 'gripper_state', 'force_torque']，共3个
+        batch_data['tabular_inputs'] = {
+            'numerical': torch.zeros(1, 3),         # 3个数值特征
+            'categorical': {
+                'action': torch.zeros(1, dtype=torch.long),      
+                'object_id': torch.zeros(1, dtype=torch.long)
+            }
+        }
+            
+        # 结构化模态
+        batch_data['structured_inputs'] = {
+            'task_features': torch.zeros(1, task_dim),
+            'constraint_features': torch.zeros(1, constraint_dim),
+            'safety_features': torch.zeros(1, safety_dim)
+        }
+        
         # Task-specific data
         if self.task == 'link_prediction':
             batch_data.update({
@@ -175,12 +205,61 @@ class FrankaKGDataset(Dataset):
         return batch_data
     
     def get_collate_fn(self):
-        """Get collate function for DataLoader"""
         def collate_fn(batch):
-            # For simplicity, assuming single graph per batch
-            # In practice, you might want to batch multiple graphs
-            return batch[0]
-        
+            # 假设 batch 是 List[Dict]
+            batch_size = len(batch)
+
+            # 拼接三模态
+            text_input_ids = torch.cat([b['text_inputs']['input_ids'] for b in batch], dim=0)           # (batch, seq_len)
+            text_attention_mask = torch.cat([b['text_inputs']['attention_mask'] for b in batch], dim=0) # (batch, seq_len)
+            tabular_numerical = torch.cat([b['tabular_inputs']['numerical'] for b in batch], dim=0)     # (batch, hidden_dim = 3)
+            
+            # categorical_features = ['action', 'object_id']
+            tabular_categorical = {}
+            for key in batch[0]['tabular_inputs']['categorical']:
+                tabular_categorical[key] = torch.cat(
+                    [b['tabular_inputs']['categorical'][key] for b in batch], dim=0
+                )  # (batch,)
+            
+            structured_task = torch.cat([b['structured_inputs']['task_features'] for b in batch], dim=0)         # (batch, task_dim)
+            structured_constraint = torch.cat([b['structured_inputs']['constraint_features'] for b in batch], dim=0) # (batch, constraint_dim)
+            structured_safety = torch.cat([b['structured_inputs']['safety_features'] for b in batch], dim=0)         # (batch, safety_dim)
+
+            # 其它字段直接拼成 list 或 tensor
+            batch_data = {
+                'node_features': batch[0]['node_features'],
+                'edge_index': batch[0]['edge_index'],
+                'edge_features': batch[0]['edge_features'],
+                'text_inputs': {
+                    'input_ids': text_input_ids,
+                    'attention_mask': text_attention_mask
+                },
+                'tabular_inputs': {
+                    'numerical': tabular_numerical,
+                    'categorical': tabular_categorical
+                },
+                'structured_inputs': {
+                    'task_features': structured_task,
+                    'constraint_features': structured_constraint,
+                    'safety_features': structured_safety
+                }
+            }
+
+            # 拼接任务相关字段
+            if 'head' in batch[0]:
+                batch_data['head'] = torch.stack([b['head'] for b in batch])
+                batch_data['tail'] = torch.stack([b['tail'] for b in batch])
+                batch_data['label'] = torch.stack([b['label'] for b in batch])
+            elif 'node_idx' in batch[0]:
+                batch_data['node_idx'] = torch.stack([b['node_idx'] for b in batch])
+                batch_data['label'] = torch.stack([b['label'] for b in batch])
+            elif 'head_idx' in batch[0]:
+                batch_data['head_idx'] = torch.stack([b['head_idx'] for b in batch])
+                batch_data['tail_idx'] = torch.stack([b['tail_idx'] for b in batch])
+                batch_data['relation_type'] = torch.stack([b['relation_type'] for b in batch])
+
+            return batch_data
+
         return collate_fn
     
     def get_num_entities(self) -> int:

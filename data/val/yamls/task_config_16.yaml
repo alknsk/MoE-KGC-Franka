@@ -1,0 +1,14 @@
+#  力反馈协作任务
+tasks:
+  - name: "force_feedback_handover"
+    type: "collaboration"
+    parameters:
+      object: "tool"
+      target: "user_hand"
+    constraints:
+      - type: "haptic_feedback"      # 触觉反馈机制
+      - type: "handover_timing"      # 交接时机约束
+    safety_limits:
+      max_force: 12.0
+      force_threshold: 3.0            # 力反馈阈值(N)
+      handover_speed: 0.15            # 交接速度(m/s)

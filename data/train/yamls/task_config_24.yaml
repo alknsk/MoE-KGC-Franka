@@ -1,0 +1,14 @@
+# 多模态反馈协同任务
+tasks:
+  - name: "multimodal_feedback_collaboration"
+    type: "human_robot_interaction"
+    parameters:
+      object: "complex_mechanism"
+      target: "maintenance_point"
+    constraints:
+      - type: "visual_auditory_cue" # 视听协同提示
+      - type: "feedback_consistency" # 反馈一致性
+    safety_limits:
+      max_force: 15.0
+      visual_cue_color: "green"     # 视觉提示颜色
+      auditory_cue_pattern: "short_beep" # 听觉提示模式

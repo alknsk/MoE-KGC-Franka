@@ -32,6 +32,7 @@ gating:
   noise_std: 0.1  #  噪声标准差
   top_k: 2  # 选择的前k个专家
   load_balancing_weight: 0.01  # 负载均衡权重
+  hidden_dim: 256
 
 # 图配置
 graph:

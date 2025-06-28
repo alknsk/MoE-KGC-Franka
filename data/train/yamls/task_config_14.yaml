@@ -1,0 +1,14 @@
+# 人体姿势适应任务
+tasks:
+  - name: "ergonomic_pick_from_low_shelf"
+    type: "manipulation"
+    parameters:
+      object: "package"
+      target: "conveyor_belt"
+    constraints:
+      - type: "human_posture_support" # 支持人体自然姿势
+      - type: "reachability_limit"    # 可达范围限制
+    safety_limits:
+      max_force: 25.0
+      min_reach_height: 0.3           # 最小可达高度(m)
+      max_bend_angle: 30.0            # 最大弯腰角度(度)

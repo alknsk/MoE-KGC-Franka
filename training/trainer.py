@@ -25,11 +25,13 @@ class Trainer:
         self.device = device or torch.device('cuda' if torch.cuda.is_available() else 'cpu')
         self.model.to(self.device)
         
+        print("weight_decay:", config.training.weight_decay, type(config.training.weight_decay))
+        
         # Initialize optimizer
         self.optimizer = AdamW(
             self.model.parameters(),
             lr=config.training.learning_rate,
-            weight_decay=config.training.weight_decay
+            weight_decay=float(config.training.weight_decay)
         )
         
         # Initialize scheduler

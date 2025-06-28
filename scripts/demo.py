@@ -158,8 +158,8 @@ class MoEKGCDemo:
 
         # This is a simplified demo - in practice, you'd need proper entity embeddings
         # Here we create dummy embeddings for demonstration
-        dummy_head = torch.randn(1, self.config.model.hidden_dim).to(self.device)
-        dummy_tail = torch.randn(1, self.config.model.hidden_dim).to(self.device)
+        dummy_head = torch.randn(1, self.config.hidden_dim).to(self.device)
+        dummy_tail = torch.randn(1, self.config.hidden_dim).to(self.device)
         relation_id = torch.tensor([0]).to(self.device)  # Dummy relation ID
 
         with torch.no_grad():
@@ -176,7 +176,7 @@ class MoEKGCDemo:
         print("\nAnalyzing expert activation patterns...")
 
         # Create dummy input for demonstration
-        dummy_input = torch.randn(1, self.config.model.expert_hidden_dim * 3).to(self.device)
+        dummy_input = torch.randn(1, self.config.expert_hidden_dim * 3).to(self.device)
 
         with torch.no_grad():
             gating_output = self.model.gating(dummy_input, return_all_scores=True)

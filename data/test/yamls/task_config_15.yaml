@@ -1,0 +1,14 @@
+# 认知引导装配任务
+tasks:
+  - name: "cognitive_guided_assembly"
+    type: "assembly"
+    parameters:
+      object: "puzzle_part"
+      target: "assembly_jig"
+    constraints:
+      - type: "visual_feedback"      # 视觉引导提示
+      - type: "cognitive_load"       # 认知负荷控制
+    safety_limits:
+      max_force: 15.0
+      feedback_interval: 0.5          # 反馈间隔(秒)
+      task_complexity: 2.0             # 任务复杂度等级(1-5)

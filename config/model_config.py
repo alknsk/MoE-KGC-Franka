@@ -14,6 +14,7 @@ class ExpertConfig:
 @dataclass
 class GatingConfig:
     """门控机制的配置"""
+    hidden_dim: int = 256
     temperature: float = 1.0  # softmax温度参数，影响门控分布的平滑程度
     noise_std: float = 0.1    # 门控噪声标准差，用于增加探索性
     top_k: int = 2            # 每次选择前k个专家

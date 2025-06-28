@@ -85,9 +85,9 @@ class BaselineComparison:
         for model_type, model_config in model_configs.items():
             model = BaselineModel(
                 model_type=model_type,
-                input_dim=self.config.model.hidden_dim,
+                input_dim=self.config['model']['hidden_dim'],
                 hidden_dim=model_config['hidden_dim'],
-                output_dim=self.config.model.hidden_dim,
+                output_dim=self.config['model']['hidden_dim'],
                 num_layers=self.config.graph.num_layers,
                 num_relations=model_config.get('num_relations')
             )

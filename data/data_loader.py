@@ -248,6 +248,8 @@ class KGDataLoader:
     
         return unique_relations
     
+    
+    
     def build_knowledge_graph(self, entities: Dict[str, List], relations: List[Dict]) -> nx.MultiDiGraph:
         """
         根据实体和关系构建NetworkX多重有向图
@@ -292,9 +294,9 @@ class KGDataLoader:
         for i, (node_id, node_data) in enumerate(G.nodes(data=True)):
             node_mapping[node_id] = i
             # 构造节点特征向量（可根据实际需求自定义）
-            feature = np.zeros(self.config.model.hidden_dim)
+            feature = np.zeros(self.config.hidden_dim)
             # 类型one-hot编码
-            type_idx = ['action', 'object', 'task', 'constraint', 'safety'].index(
+            type_idx = ['action', 'object', 'task', 'constraint', 'safety', 'spatial'].index(
                 node_data.get('type', 'object')
             )
             feature[type_idx] = 1.0

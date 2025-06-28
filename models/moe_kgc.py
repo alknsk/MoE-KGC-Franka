@@ -23,9 +23,9 @@ class MoEKGC(nn.Module):
         # Initialize encoders
         self.text_encoder = TextEncoder(
             model_name="bert-base-uncased",
-            hidden_dim=config.model.hidden_dim,
-            output_dim=config.model.expert_hidden_dim,
-            dropout_rate=config.model.dropout_rate
+            hidden_dim=config.hidden_dim,#删去model
+            output_dim=config.expert_hidden_dim,#删去model
+            dropout_rate=config.dropout_rate#删去model
         )
 
         self.tabular_encoder = TabularEncoder(
@@ -35,67 +35,67 @@ class MoEKGC(nn.Module):
                 'action': {'vocab_size': config.data.vocab_size, 'embed_dim': 64},
                 'object_id': {'vocab_size': 1000, 'embed_dim': 32}
             },
-            hidden_dims=[config.model.expert_hidden_dim, config.model.expert_hidden_dim // 2],
-            output_dim=config.model.expert_hidden_dim,
-            dropout_rate=config.model.dropout_rate
+            hidden_dims=[config.expert_hidden_dim, config.expert_hidden_dim // 2],
+            output_dim=config.expert_hidden_dim,
+            dropout_rate=config.dropout_rate
         )
 
         self.structured_encoder = StructuredEncoder(
             input_dim=256,  # Placeholder
-            hidden_dims=[config.model.expert_hidden_dim, config.model.expert_hidden_dim // 2],
-            output_dim=config.model.expert_hidden_dim,
-            dropout_rate=config.model.dropout_rate,
+            hidden_dims=[config.expert_hidden_dim, config.expert_hidden_dim // 2],
+            output_dim=config.expert_hidden_dim,
+            dropout_rate=config.dropout_rate,
             use_graph_structure=True
         )
 
         # Initialize experts
-        expert_input_dim = config.model.expert_hidden_dim
+        expert_input_dim = config.expert_hidden_dim
         self.experts = nn.ModuleDict({
             'action': ActionExpert(
                 input_dim=expert_input_dim,
-                hidden_dims=config.experts['action_expert']['hidden_dims'],
-                output_dim=config.model.hidden_dim,
-                dropout_rate=config.model.dropout_rate,
-                use_attention=config.experts['action_expert']['use_attention'],
+                hidden_dims=config.experts['action_expert'].hidden_dims,
+                output_dim=config.hidden_dim,
+                dropout_rate=config.dropout_rate,
+                use_attention=config.experts['action_expert'].use_attention,
                 num_joints=config.franka.joint_dim
             ),
             'spatial': SpatialExpert(
                 input_dim=expert_input_dim,
-                hidden_dims=config.experts['spatial_expert']['hidden_dims'],
-                output_dim=config.model.hidden_dim,
-                dropout_rate=config.model.dropout_rate,
-                use_attention=config.experts['spatial_expert']['use_attention'],
+                hidden_dims=config.experts['spatial_expert'].hidden_dims,
+                output_dim=config.hidden_dim,
+                dropout_rate=config.dropout_rate,
+                use_attention=config.experts['spatial_expert'].use_attention,
                 workspace_dim=3
             ),
             'temporal': TemporalExpert(
                 input_dim=expert_input_dim,
-                hidden_dims=config.experts['temporal_expert']['hidden_dims'],
-                output_dim=config.model.hidden_dim,
-                dropout_rate=config.model.dropout_rate,
-                use_attention=config.experts['temporal_expert']['use_attention']
+                hidden_dims=config.experts['temporal_expert'].hidden_dims,
+                output_dim=config.hidden_dim,
+                dropout_rate=config.dropout_rate,
+                use_attention=config.experts['temporal_expert'].use_attention
             ),
             'semantic': SemanticExpert(
                 input_dim=expert_input_dim,
-                hidden_dims=config.experts['semantic_expert']['hidden_dims'],
-                output_dim=config.model.hidden_dim,
-                dropout_rate=config.model.dropout_rate,
-                use_attention=config.experts['semantic_expert']['use_attention'],
+                hidden_dims=config.experts['semantic_expert'].hidden_dims,
+                output_dim=config.hidden_dim,
+                dropout_rate=config.dropout_rate,
+                use_attention=config.experts['semantic_expert'].use_attention,
                 vocab_size=config.data.vocab_size
             ),
             'safety': SafetyExpert(
                 input_dim=expert_input_dim,
-                hidden_dims=config.experts['safety_expert']['hidden_dims'],
-                output_dim=config.model.hidden_dim,
-                dropout_rate=config.model.dropout_rate,
-                use_attention=config.experts['safety_expert']['use_attention']
+                hidden_dims=config.experts['safety_expert'].hidden_dims,
+                output_dim=config.hidden_dim,
+                dropout_rate=config.dropout_rate,
+                use_attention=config.experts['safety_expert'].use_attention
             )
         })
 
         # Initialize gating mechanism
         self.gating = AdaptiveGating(
-            input_dim=config.model.expert_hidden_dim * 3,  # 3 encoders
-            num_experts=config.model.num_experts,
-            hidden_dim=config.gating.temperature,
+            input_dim=config.expert_hidden_dim * 3,  # 3 encoders
+            num_experts=config.num_experts,
+            hidden_dim=config.gating.hidden_dim,
             temperature=config.gating.temperature,
             noise_std=config.gating.noise_std,
             top_k=config.gating.top_k,
@@ -104,44 +104,44 @@ class MoEKGC(nn.Module):
 
         # Initialize GNN
         self.gnn = EnhancedGNN(
-            input_dim=config.model.hidden_dim,
-            hidden_dim=config.model.hidden_dim,
-            output_dim=config.model.hidden_dim,
+            input_dim=config.hidden_dim,
+            hidden_dim=config.hidden_dim,
+            output_dim=config.hidden_dim,
             num_layers=config.graph.num_layers,
             edge_dim=config.graph.edge_hidden_dim if config.graph.use_edge_features else None,
-            dropout=config.model.dropout_rate
+            dropout=config.dropout_rate
         )
 
         # Initialize graph fusion
         self.graph_fusion = GraphFusion(
-            input_dims=[config.model.hidden_dim] * config.model.num_experts,
-            hidden_dim=config.model.hidden_dim,
-            output_dim=config.model.hidden_dim,
+            input_dims=[config.hidden_dim] * config.num_experts,
+            hidden_dim=config.hidden_dim,
+            output_dim=config.hidden_dim,
             fusion_type='attention',
-            dropout=config.model.dropout_rate
+            dropout=config.dropout_rate
         )
 
         # Initialize task heads
         self.link_prediction_head = LinkPredictionHead(
-            entity_dim=config.model.hidden_dim,
-            relation_dim=config.model.hidden_dim // 2,
-            hidden_dim=config.model.hidden_dim,
+            entity_dim=config.hidden_dim,
+            relation_dim=config.hidden_dim // 2,
+            hidden_dim=config.hidden_dim,
             num_relations=config.data.num_relations,
-            dropout=config.model.dropout_rate
+            dropout=config.dropout_rate
         )
 
         self.entity_classification_head = EntityClassificationHead(
-            input_dim=config.model.hidden_dim,
+            input_dim=config.hidden_dim,
             num_classes=config.data.num_entity_types,
-            hidden_dims=[config.model.hidden_dim, config.model.hidden_dim // 2],
-            dropout=config.model.dropout_rate
+            hidden_dims=[config.hidden_dim, config.hidden_dim // 2],
+            dropout=config.dropout_rate
         )
 
         self.relation_extraction_head = RelationExtractionHead(
-            entity_dim=config.model.hidden_dim,
+            entity_dim=config.hidden_dim,
             num_relations=config.data.num_relations,
-            hidden_dim=config.model.hidden_dim,
-            dropout=config.model.dropout_rate
+            hidden_dim=config.hidden_dim,
+            dropout=config.dropout_rate
         )
 
     def encode_multimodal_input(self, batch: Dict[str, Any]) -> Dict[str, torch.Tensor]:
@@ -154,6 +154,7 @@ class MoEKGC(nn.Module):
                 batch['text_inputs']['input_ids'],
                 batch['text_inputs']['attention_mask']
             )
+            print("text_encoded shape:", text_encoded.shape)  # Debugging line
             encoded['text'] = text_encoded
 
         # Encode tabular data if available
@@ -162,8 +163,15 @@ class MoEKGC(nn.Module):
                 batch['tabular_inputs']['numerical'],
                 batch['tabular_inputs']['categorical']
             )
+            print("tabular_encoded shape:", tabular_encoded.shape) # Debugging line
             encoded['tabular'] = tabular_encoded
 
+        elif 'node_features' in batch:
+            # 只有没有tabular_inputs时才用node_features
+            print("node_features shape:", batch['node_features'].shape)
+            # 这里建议只在特殊情况用，并确保shape为(batch, D)
+            encoded['tabular'] = batch['node_features']
+        
         # Encode structured data if available
         if 'structured_inputs' in batch:
             structured_encoded = self.structured_encoder(
@@ -171,27 +179,30 @@ class MoEKGC(nn.Module):
                 batch['structured_inputs']['constraint_features'],
                 batch['structured_inputs']['safety_features']
             )
+            print("structured_encoded shape:", structured_encoded.shape) # Debugging line
             encoded['structured'] = structured_encoded
-
+            
         return encoded
 
-    def apply_experts(self, encoded_features: torch.Tensor,
+    def apply_experts(self, expert_inputs: Dict[str, torch.Tensor],
                      expert_indices: torch.Tensor,
                      expert_gates: torch.Tensor,
                      batch: Dict[str, Any]) -> torch.Tensor:
         """Apply selected experts to encoded features"""
-        batch_size = encoded_features.size(0)
-        output_dim = self.config.model.hidden_dim
+        batch_size = expert_indices.size(0)
+        output_dim = self.config.hidden_dim
 
         # Initialize output tensor
-        expert_outputs = torch.zeros(batch_size, output_dim, device=encoded_features.device)
+        expert_outputs = torch.zeros(batch_size, output_dim, device=expert_gates.device)
 
         # Apply each expert
         for i in range(batch_size):
             for j, (expert_idx, gate) in enumerate(zip(expert_indices[i], expert_gates[i])):
                 expert_name = list(self.experts.keys())[expert_idx]
                 expert = self.experts[expert_name]
-
+                # 取该 expert 对应的输入
+                expert_input = expert_inputs[expert_name][i:i+1]
+                
                 # Prepare expert-specific inputs
                 expert_kwargs = {}
                 if expert_name == 'action' and 'joint_positions' in batch:
@@ -202,8 +213,8 @@ class MoEKGC(nn.Module):
                     expert_kwargs['timestamps'] = batch['timestamps'][i:i+1]
 
                 # Apply expert
-                expert_output = expert(encoded_features[i:i+1], **expert_kwargs)
-
+                expert_output = expert(expert_input, **expert_kwargs)
+                
                 # Weight by gate
                 expert_outputs[i] += gate * expert_output.squeeze(0)
 
@@ -220,6 +231,9 @@ class MoEKGC(nn.Module):
         Returns:
             Task-specific outputs
         """
+        
+        print("Batch keys:", batch.keys())
+        
         # Encode multimodal inputs
         encoded = self.encode_multimodal_input(batch)
 
@@ -227,10 +241,13 @@ class MoEKGC(nn.Module):
         combined_features = []
         for modality in ['text', 'tabular', 'structured']:
             if modality in encoded:
+                print(f"{modality} to be concatenated shape:", encoded[modality].shape) # Debugging line
                 combined_features.append(encoded[modality])
 
         if combined_features:
+            print("All features to be concatenated shapes:", [f.shape for f in combined_features]) # Debugging line
             combined_features = torch.cat(combined_features, dim=-1)
+            print("combined_features shape after cat:", combined_features.shape) # Debugging line
         else:
             raise ValueError("No input modalities found in batch")
 
@@ -239,9 +256,17 @@ class MoEKGC(nn.Module):
         expert_indices = gating_output['indices']
         expert_gates = gating_output['gates']
 
+        expert_inputs = {
+            'action': encoded['tabular'],      # tabular编码
+            'spatial': encoded['structured'],  # structured编码
+            'temporal': encoded['text'],       # text编码
+            'semantic': encoded['text'],       # text编码
+            'safety': encoded['structured']    # structured编码
+        }
+        
         # Apply selected experts
         expert_outputs = self.apply_experts(
-            combined_features, expert_indices, expert_gates, batch
+            expert_inputs, expert_indices, expert_gates, batch
         )
 
         # Apply GNN if graph structure is available

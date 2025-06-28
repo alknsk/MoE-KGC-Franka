@@ -1,0 +1,14 @@
+# 姿势舒适度优化任务
+tasks:
+  - name: "posture_comfort_optimized_handling"
+    type: "ergonomics"
+    parameters:
+      object: "daily_object"
+      target: "user_preferred_position"
+    constraints:
+      - type: "anthropometric_fit"   # 人体尺寸适配
+      - type: "posture_stability"    # 姿势稳定性
+    safety_limits:
+      max_force: 18.0
+      elbow_angle: 90-120            # 肘关节角度范围(度)
+      shoulder_height: 1.2-1.5       # 肩部高度范围(m)

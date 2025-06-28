@@ -27,16 +27,16 @@ class TestTraining(unittest.TestCase):
         self.num_samples = 20
 
         # Reduce model size for testing
-        self.config.model.hidden_dim = 64
-        self.config.model.expert_hidden_dim = 32
+        self.config.hidden_dim = 64
+        self.config.expert_hidden_dim = 32
         self.config.training.epochs = 2
 
     def create_dummy_dataloader(self, task='link_prediction'):
         """Create dummy dataloader for testing"""
         if task == 'link_prediction':
             # Create dummy link prediction data
-            head_embeddings = torch.randn(self.num_samples, self.config.model.hidden_dim)
-            tail_embeddings = torch.randn(self.num_samples, self.config.model.hidden_dim)
+            head_embeddings = torch.randn(self.num_samples, self.config.hidden_dim)
+            tail_embeddings = torch.randn(self.num_samples, self.config.hidden_dim)
             relation_ids = torch.randint(0, 10, (self.num_samples,))
             labels = torch.randint(0, 2, (self.num_samples,)).float()
 
@@ -48,7 +48,7 @@ class TestTraining(unittest.TestCase):
                     'tail_embeddings': torch.stack([b[1] for b in batch]),
                     'relation_ids': torch.stack([b[2] for b in batch]),
                     'labels': torch.stack([b[3] for b in batch]),
-                    'node_features': torch.randn(10, self.config.model.hidden_dim),
+                    'node_features': torch.randn(10, self.config.hidden_dim),
                     'edge_index': torch.randint(0, 10, (2, 20))
                 }
 
@@ -56,7 +56,7 @@ class TestTraining(unittest.TestCase):
 
         elif task == 'entity_classification':
             # Create dummy classification data
-            node_features = torch.randn(self.num_samples, self.config.model.hidden_dim)
+            node_features = torch.randn(self.num_samples, self.config.hidden_dim)
             labels = torch.randint(0, 5, (self.num_samples,))
 
             dataset = TensorDataset(node_features, labels)
