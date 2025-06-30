@@ -58,7 +58,9 @@ class TemporalExpert(BaseExpert):
         
         # Positional encoding
         self.positional_encoding = self._create_positional_encoding()
-    
+
+        self.feature_proj = None  # 动态创建投影层
+        
     def _create_positional_encoding(self) -> torch.Tensor:
         """Create sinusoidal positional encoding"""
         pe = torch.zeros(self.max_sequence_length, self.hidden_dims[0] * 2)
@@ -103,13 +105,22 @@ class TemporalExpert(BaseExpert):
             lstm_out = lstm_out.transpose(0, 1)  # [seq_len, batch, features]
             transformer_out = self.transformer(lstm_out)
             transformer_out = transformer_out.transpose(0, 1)  # [batch, seq_len, features]
-            
-            return transformer_out
+            combined_features = transformer_out
         else:
             # For non-sequential input, expand and process
             x_expanded = x.unsqueeze(1)
             lstm_out, _ = self.lstm(x_expanded)
-            return lstm_out.squeeze(1)
+            combined_features = lstm_out.squeeze(1)
+
+        # === 新增：投影到 input_dim ===
+        last_dim = combined_features.shape[-1]
+        if last_dim != self.input_dim:
+            if (self.feature_proj is None or 
+                self.feature_proj.in_features != last_dim or 
+                self.feature_proj.out_features != self.input_dim):
+                self.feature_proj = nn.Linear(last_dim, self.input_dim).to(combined_features.device)
+            combined_features = self.feature_proj(combined_features)
+        return combined_features
     
     def predict_temporal_relation(self, seq1: torch.Tensor, seq2: torch.Tensor) -> Dict[str, torch.Tensor]:
         """Predict temporal relation between two sequences"""

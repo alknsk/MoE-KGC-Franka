@@ -147,9 +147,20 @@ class MoEKGC(nn.Module):
     def encode_multimodal_input(self, batch: Dict[str, Any]) -> Dict[str, torch.Tensor]:
         """Encode different modalities of input data"""
         encoded = {}
+        num_nodes = batch['node_features'].shape[0]
+        assert batch['text_inputs']['input_ids'].shape[0] == num_nodes
+        assert batch['tabular_inputs']['numerical'].shape[0] == num_nodes
+        assert batch['structured_inputs']['task_features'].shape[0] == num_nodes
 
         # Encode text data if available
         if 'text_inputs' in batch:
+            print("input_ids shape:", batch['text_inputs']['input_ids'].shape)
+            print("attention_mask shape:", batch['text_inputs']['attention_mask'].shape)
+            # 检查是否为二维
+            assert batch['text_inputs']['input_ids'].dim() == 2, \
+                f"input_ids shape must be [num_nodes, seq_len], got {batch['text_inputs']['input_ids'].shape}"
+            assert batch['text_inputs']['attention_mask'].dim() == 2, \
+                f"attention_mask shape must be [num_nodes, seq_len], got {batch['text_inputs']['attention_mask'].shape}"
             text_encoded = self.text_encoder(
                 batch['text_inputs']['input_ids'],
                 batch['text_inputs']['attention_mask']
@@ -189,14 +200,14 @@ class MoEKGC(nn.Module):
                      expert_gates: torch.Tensor,
                      batch: Dict[str, Any]) -> torch.Tensor:
         """Apply selected experts to encoded features"""
-        batch_size = expert_indices.size(0)
+        num_nodes = expert_indices.size(0)
         output_dim = self.config.hidden_dim
 
         # Initialize output tensor
-        expert_outputs = torch.zeros(batch_size, output_dim, device=expert_gates.device)
+        expert_outputs = torch.zeros(num_nodes, output_dim, device=expert_gates.device)
 
-        # Apply each expert
-        for i in range(batch_size):
+        # Apply each expertS
+        for i in range(num_nodes):
             for j, (expert_idx, gate) in enumerate(zip(expert_indices[i], expert_gates[i])):
                 expert_name = list(self.experts.keys())[expert_idx]
                 expert = self.experts[expert_name]
@@ -245,14 +256,12 @@ class MoEKGC(nn.Module):
                 combined_features.append(encoded[modality])
 
         if combined_features:
-            print("All features to be concatenated shapes:", [f.shape for f in combined_features]) # Debugging line
-            combined_features = torch.cat(combined_features, dim=-1)
-            print("combined_features shape after cat:", combined_features.shape) # Debugging line
+            combined_features_cat = torch.cat(combined_features, dim=-1)
         else:
             raise ValueError("No input modalities found in batch")
 
         # Apply gating mechanism
-        gating_output = self.gating(combined_features)
+        gating_output = self.gating(combined_features_cat)
         expert_indices = gating_output['indices']
         expert_gates = gating_output['gates']
 
@@ -263,7 +272,7 @@ class MoEKGC(nn.Module):
             'semantic': encoded['text'],       # text编码
             'safety': encoded['structured']    # structured编码
         }
-        
+            
         # Apply selected experts
         expert_outputs = self.apply_experts(
             expert_inputs, expert_indices, expert_gates, batch
@@ -271,6 +280,16 @@ class MoEKGC(nn.Module):
 
         # Apply GNN if graph structure is available
         if 'edge_index' in batch:
+            print("expert_outputs shape:", expert_outputs.shape)
+            print("edge_index shape:", batch['edge_index'].shape)
+            print("edge_index max:", batch['edge_index'].max().item())
+            print("edge_index min:", batch['edge_index'].min().item())
+            print("expert_outputs.size(0):", expert_outputs.size(0))
+            # 这是用来dubug的，用完记得删除
+            
+            assert batch['edge_index'].max().item() < expert_outputs.size(0), \
+                f"edge_index越界: max={batch['edge_index'].max().item()}, 节点数={expert_outputs.size(0)}"
+            
             gnn_output = self.gnn(
                 expert_outputs,
                 batch['edge_index'],
@@ -286,20 +305,20 @@ class MoEKGC(nn.Module):
         # Task-specific heads
         if task == 'link_prediction':
             output = self.link_prediction_head(
-                batch['head_embeddings'],
-                batch['tail_embeddings'],
-                batch['relation_ids']
+                node_embeddings[batch['head']],
+                node_embeddings[batch['tail']],
+                batch['label']
             )
         elif task == 'entity_classification':
             output = self.entity_classification_head(
-                node_embeddings,
-                batch.get('node_mask', None)
+                node_embeddings[batch['node_idx']],
+                batch['label']
             )
         elif task == 'relation_extraction':
             output = self.relation_extraction_head(
-                batch['head_embeddings'],
-                batch['tail_embeddings'],
-                batch.get('context', None)
+                node_embeddings[batch['head_idx']],
+                node_embeddings[batch['tail_idx']],
+                batch['relation_type']
             )
         else:
             raise ValueError(f"Unknown task: {task}")

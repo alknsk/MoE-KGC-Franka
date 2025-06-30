@@ -70,6 +70,8 @@ class SafetyExpert(BaseExpert):
             batch_first=True,
             dropout=dropout_rate
         )
+        
+        self.feature_proj = None  # 动态创建投影层
     
     def compute_expert_features(self, x: torch.Tensor, **kwargs) -> torch.Tensor:
         """Compute safety-related features"""
@@ -101,18 +103,15 @@ class SafetyExpert(BaseExpert):
         if not features:
             return x
         
-        # Combine all safety features
-        combined = torch.cat(features, dim=-1)
+        combined = torch.cat(features, dim=-1) if len(features) > 1 else features[0]
         
-        # Pad if necessary
-        if combined.size(-1) < x.size(-1):
-            padding = torch.zeros(
-                *combined.shape[:-1], 
-                x.size(-1) - combined.size(-1),
-                device=combined.device
-            )
-            combined = torch.cat([combined, padding], dim=-1)
-        
+        # 投影到 input_dim 
+        if combined.shape[-1] != self.input_dim:
+            if (self.feature_proj is None or 
+                self.feature_proj.in_features != combined.shape[-1] or 
+                self.feature_proj.out_features != self.input_dim):
+                self.feature_proj = nn.Linear(combined.shape[-1], self.input_dim).to(combined.device)
+            combined = self.feature_proj(combined)
         return combined
     
     def assess_collision_risk(self, state: torch.Tensor, **kwargs) -> Dict[str, torch.Tensor]:

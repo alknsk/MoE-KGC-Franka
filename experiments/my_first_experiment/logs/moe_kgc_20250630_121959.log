@@ -1,0 +1,10 @@
+2025-06-30 12:19:59 - moe_kgc - INFO - Logging to experiments/my_first_experiment/logs/moe_kgc_20250630_121959.log
+2025-06-30 12:19:59 - moe_kgc - INFO - 开始实验: my_first_experiment
+2025-06-30 12:19:59 - moe_kgc - INFO - 使用设备: cuda
+2025-06-30 12:19:59 - moe_kgc - INFO - 加载数据...
+2025-06-30 12:20:19 - moe_kgc - INFO - 训练集大小: 1
+2025-06-30 12:20:19 - moe_kgc - INFO - 验证集大小: 1
+2025-06-30 12:20:19 - moe_kgc - INFO - 测试集大小: 1
+2025-06-30 12:20:19 - moe_kgc - INFO - 初始化模型...
+2025-06-30 12:20:23 - moe_kgc - INFO - 模型参数量: 243,448,878
+2025-06-30 12:20:24 - moe_kgc - INFO - 开始训练...

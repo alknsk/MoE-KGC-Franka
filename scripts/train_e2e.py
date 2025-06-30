@@ -17,6 +17,7 @@ from models import MoEKGC
 from training import Trainer
 from evaluation import Evaluator, BaselineComparison
 from utils import setup_logger, set_seed, plot_training_history
+from torch_geometric.loader import DataLoader
 
 
 def main():
@@ -96,28 +97,24 @@ def main():
     test_dataset = data_loader.create_dataset(Path(args.data_dir) / 'test')
 
     # 创建数据加载器
-    train_loader = torch.utils.data.DataLoader(
+    train_loader = DataLoader(
         train_dataset,
-        batch_size=config.training.batch_size,
+        batch_size=1,  # 每次一个图/子图
         shuffle=True,
         num_workers=4,
         collate_fn=train_dataset.get_collate_fn()
     )
-
-    val_loader = torch.utils.data.DataLoader(
+    val_loader = DataLoader(
         val_dataset,
-        batch_size=config.training.batch_size,
+        batch_size=1,
         shuffle=False,
-        num_workers=4,
-        collate_fn=val_dataset.get_collate_fn()
+        num_workers=4
     )
-
-    test_loader = torch.utils.data.DataLoader(
+    test_loader = DataLoader(
         test_dataset,
-        batch_size=config.training.batch_size,
+        batch_size=1,
         shuffle=False,
-        num_workers=4,
-        collate_fn=test_dataset.get_collate_fn()
+        num_workers=4
     )
 
     logger.info(f"训练集大小: {len(train_dataset)}")

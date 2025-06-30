@@ -137,18 +137,19 @@ class FrankaKGDataset(Dataset):
                 })
     
     def __len__(self) -> int:
-        """获取数据集长度"""
-        return len(self.samples)
+        """只返回1，表示整个数据集就是一个大图"""
+        return 1
     
     def __getitem__(self, idx: int) -> Dict[str, Any]:
         """根据索引获取样本"""
-        sample = self.samples[idx]
         
-        # 基础图数据
         batch_data = {
-            'node_features': self.features['node_features'],
-            'edge_index': self.features['edge_index'],
-            'edge_features': self.features['edge_features']
+            'node_features': self.features['node_features'],      # [num_nodes, D]
+            'edge_index': self.features['edge_index'],            # [2, num_edges]
+            'edge_features': self.features['edge_features'],      # [num_edges, D]
+            'text_inputs': self.features['text_inputs'],          # [num_nodes, seq_len]等
+            'tabular_inputs': self.features['tabular_inputs'],    # [num_nodes, ...]
+            'structured_inputs': self.features['structured_inputs'], # [num_nodes, ...]
         }
         
         # ----------- 新增：三模态占位 -----------
@@ -181,84 +182,25 @@ class FrankaKGDataset(Dataset):
             'safety_features': torch.zeros(1, safety_dim)
         }
         
-        # Task-specific data
+        # 任务相关字段
         if self.task == 'link_prediction':
-            batch_data.update({
-                'head': torch.tensor(sample['head'], dtype=torch.long),
-                'tail': torch.tensor(sample['tail'], dtype=torch.long),
-                'label': torch.tensor(sample['label'], dtype=torch.float)
-            })
-        
+            # 全部正负样本的 head/tail/label 索引
+            batch_data['head'] = torch.tensor([s['head'] for s in self.samples], dtype=torch.long)
+            batch_data['tail'] = torch.tensor([s['tail'] for s in self.samples], dtype=torch.long)
+            batch_data['label'] = torch.tensor([s['label'] for s in self.samples], dtype=torch.float)
         elif self.task == 'entity_classification':
-            batch_data.update({
-                'node_idx': torch.tensor(sample['node_idx'], dtype=torch.long),
-                'label': torch.tensor(sample['label'], dtype=torch.long)
-            })
-        
+            batch_data['node_idx'] = torch.tensor([s['node_idx'] for s in self.samples], dtype=torch.long)
+            batch_data['label'] = torch.tensor([s['label'] for s in self.samples], dtype=torch.long)
         elif self.task == 'relation_extraction':
-            batch_data.update({
-                'head_idx': torch.tensor(sample['head_idx'], dtype=torch.long),
-                'tail_idx': torch.tensor(sample['tail_idx'], dtype=torch.long),
-                'relation_type': torch.tensor(sample['relation_type'], dtype=torch.long)
-            })
+            batch_data['head_idx'] = torch.tensor([s['head_idx'] for s in self.samples], dtype=torch.long)
+            batch_data['tail_idx'] = torch.tensor([s['tail_idx'] for s in self.samples], dtype=torch.long)
+            batch_data['relation_type'] = torch.tensor([s['relation_type'] for s in self.samples], dtype=torch.long)
         
         return batch_data
     
     def get_collate_fn(self):
         def collate_fn(batch):
-            # 假设 batch 是 List[Dict]
-            batch_size = len(batch)
-
-            # 拼接三模态
-            text_input_ids = torch.cat([b['text_inputs']['input_ids'] for b in batch], dim=0)           # (batch, seq_len)
-            text_attention_mask = torch.cat([b['text_inputs']['attention_mask'] for b in batch], dim=0) # (batch, seq_len)
-            tabular_numerical = torch.cat([b['tabular_inputs']['numerical'] for b in batch], dim=0)     # (batch, hidden_dim = 3)
-            
-            # categorical_features = ['action', 'object_id']
-            tabular_categorical = {}
-            for key in batch[0]['tabular_inputs']['categorical']:
-                tabular_categorical[key] = torch.cat(
-                    [b['tabular_inputs']['categorical'][key] for b in batch], dim=0
-                )  # (batch,)
-            
-            structured_task = torch.cat([b['structured_inputs']['task_features'] for b in batch], dim=0)         # (batch, task_dim)
-            structured_constraint = torch.cat([b['structured_inputs']['constraint_features'] for b in batch], dim=0) # (batch, constraint_dim)
-            structured_safety = torch.cat([b['structured_inputs']['safety_features'] for b in batch], dim=0)         # (batch, safety_dim)
-
-            # 其它字段直接拼成 list 或 tensor
-            batch_data = {
-                'node_features': batch[0]['node_features'],
-                'edge_index': batch[0]['edge_index'],
-                'edge_features': batch[0]['edge_features'],
-                'text_inputs': {
-                    'input_ids': text_input_ids,
-                    'attention_mask': text_attention_mask
-                },
-                'tabular_inputs': {
-                    'numerical': tabular_numerical,
-                    'categorical': tabular_categorical
-                },
-                'structured_inputs': {
-                    'task_features': structured_task,
-                    'constraint_features': structured_constraint,
-                    'safety_features': structured_safety
-                }
-            }
-
-            # 拼接任务相关字段
-            if 'head' in batch[0]:
-                batch_data['head'] = torch.stack([b['head'] for b in batch])
-                batch_data['tail'] = torch.stack([b['tail'] for b in batch])
-                batch_data['label'] = torch.stack([b['label'] for b in batch])
-            elif 'node_idx' in batch[0]:
-                batch_data['node_idx'] = torch.stack([b['node_idx'] for b in batch])
-                batch_data['label'] = torch.stack([b['label'] for b in batch])
-            elif 'head_idx' in batch[0]:
-                batch_data['head_idx'] = torch.stack([b['head_idx'] for b in batch])
-                batch_data['tail_idx'] = torch.stack([b['tail_idx'] for b in batch])
-                batch_data['relation_type'] = torch.stack([b['relation_type'] for b in batch])
-
-            return batch_data
+            return batch[0]
 
         return collate_fn
     

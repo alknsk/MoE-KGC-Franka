@@ -118,7 +118,23 @@ class TestDataProcessing(unittest.TestCase):
             'node_features': torch.randn(3, 256),
             'edge_index': torch.tensor([[0, 0], [1, 2]]),
             'edge_features': torch.randn(2, 128),
-            'node_mapping': {0: 0, 1: 1, 2: 2}
+            'node_mapping': {0: 0, 1: 1, 2: 2},
+            'text_inputs': {
+                'input_ids': torch.zeros(3, 32, dtype=torch.long),
+                'attention_mask': torch.ones(3, 32, dtype=torch.long)
+            },
+            'tabular_inputs': {
+                'numerical': torch.zeros(3, 3),
+                'categorical': {
+                    'action': torch.zeros(3, dtype=torch.long),
+                    'object_id': torch.zeros(3, dtype=torch.long)
+                }
+            },
+            'structured_inputs': {
+                'task_features': torch.zeros(3, 256),
+                'constraint_features': torch.zeros(3, 256),
+                'safety_features': torch.zeros(3, 256)
+            }
         }
 
         # Create dataset

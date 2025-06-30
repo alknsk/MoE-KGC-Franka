@@ -64,7 +64,7 @@ python MoE_franka/scripts/prepare_data.py \
 ### 1.2 模型训练
 ```bash
 # 基础训练命令
-cd /home2/yanghaochen/MoE_franka
+cd MoE_franka
 python scripts/train_e2e.py \
     --data_dir ./data \
     --task link_prediction \

@@ -46,6 +46,8 @@ class ActionExpert(BaseExpert):
         
         # Action classifier head
         self.action_classifier = nn.Linear(output_dim, action_vocab_size)
+        
+        self.feature_proj = None  # 动态创建投影层
     
     def compute_expert_features(self, x: torch.Tensor, **kwargs) -> torch.Tensor:
         """
@@ -88,6 +90,14 @@ class ActionExpert(BaseExpert):
             combined_features = combined_features.transpose(1, 2)
             combined_features = self.temporal_conv(combined_features)
             combined_features = combined_features.transpose(1, 2)
+        
+        # 投影到 input_dim
+        if combined_features.shape[-1] != self.input_dim:
+            if (self.feature_proj is None or 
+                self.feature_proj.in_features != combined_features.shape[-1] or 
+                self.feature_proj.out_features != self.input_dim):
+                self.feature_proj = nn.Linear(combined_features.shape[-1], self.input_dim).to(combined_features.device)
+            combined_features = self.feature_proj(combined_features)
         
         return combined_features
     
