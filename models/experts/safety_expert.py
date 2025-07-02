@@ -70,6 +70,8 @@ class SafetyExpert(BaseExpert):
             batch_first=True,
             dropout=dropout_rate
         )
+        
+        self.feature_proj = None  # 动态创建投影层
     
         self.safety_feature_projection = nn.Linear((hidden_dims[0] // 3) * 3, input_dim)
         

@@ -46,6 +46,8 @@ class ActionExpert(BaseExpert):
         
         # Action classifier head
         self.action_classifier = nn.Linear(output_dim, action_vocab_size)
+        
+        self.feature_proj = None  # 动态创建投影层
     
         # 最多拼接3个分量（这里乘3了）
         self.action_feature_projection = nn.Linear((hidden_dims[0] // 2) * 3, input_dim)
