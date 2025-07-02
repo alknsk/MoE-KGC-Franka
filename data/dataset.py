@@ -1,8 +1,9 @@
 import torch
-from torch.utils.data import Dataset
 import numpy as np
 import networkx as nx
 from typing import Dict, List, Any, Optional, Tuple
+from torch_geometric.data import Data, Dataset
+from torch.utils.data import Dataset
 import random
 
 """Franka机器人知识图谱数据集"""

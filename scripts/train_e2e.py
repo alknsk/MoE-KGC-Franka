@@ -101,22 +101,19 @@ def main():
         train_dataset,
         batch_size=args.batch_size,
         shuffle=True,
-        num_workers=4,
-        collate_fn=train_dataset.get_collate_fn()
+        num_workers=4
     )
     val_loader = DataLoader(
         val_dataset,
         batch_size=args.batch_size,
         shuffle=False,
-        num_workers=4,
-        collate_fn=val_dataset.get_collate_fn()
+        num_workers=4
     )
     test_loader = DataLoader(
         test_dataset,
         batch_size=args.batch_size,
         shuffle=False,
-        num_workers=4,
-        collate_fn=test_dataset.get_collate_fn()
+        num_workers=4
     )
 
     logger.info(f"训练集大小: {len(train_dataset)}")
