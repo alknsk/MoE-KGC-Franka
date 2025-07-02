@@ -101,7 +101,8 @@ def main():
         train_dataset,
         batch_size=args.batch_size,
         shuffle=True,
-        num_workers=4
+        num_workers=4,
+        collate_fn=train_dataset.get_collate_fn()
     )
     val_loader = DataLoader(
         val_dataset,

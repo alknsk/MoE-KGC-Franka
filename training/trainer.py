@@ -2,7 +2,8 @@ import torch
 import torch.nn as nn
 from torch.optim import AdamW
 from torch.optim.lr_scheduler import CosineAnnealingLR, ReduceLROnPlateau
-from torch.utils.data import DataLoader
+# from torch.utils.data import DataLoader
+from torch_geometric.loader import DataLoader
 from typing import Dict, Optional, List, Tuple, Any
 import numpy as np
 from tqdm import tqdm
