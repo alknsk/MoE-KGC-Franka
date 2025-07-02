@@ -319,11 +319,41 @@ class KGDataLoader:
         edge_index = torch.tensor(edge_index, dtype=torch.long).t()
         edge_features = torch.tensor(np.array(edge_features), dtype=torch.float32)
         
+        num_nodes = node_features.shape[0]
+        seq_len = 128
+        tabular_dim = 3
+        task_dim = 256
+        constraint_dim = 256
+        safety_dim = 256
+
+        # 文本模态（BERT输入格式）
+        text_inputs = {
+            'input_ids': torch.zeros(num_nodes, seq_len, dtype=torch.long),
+            'attention_mask': torch.ones(num_nodes, seq_len, dtype=torch.long)
+        }
+        # 表格模态
+        tabular_inputs = {
+            'numerical': torch.zeros(num_nodes, tabular_dim),
+            'categorical': {
+                'action': torch.zeros(num_nodes, dtype=torch.long),
+                'object_id': torch.zeros(num_nodes, dtype=torch.long)
+            }
+        }
+        # 结构化模态
+        structured_inputs = {
+            'task_features': torch.zeros(num_nodes, task_dim),
+            'constraint_features': torch.zeros(num_nodes, constraint_dim),
+            'safety_features': torch.zeros(num_nodes, safety_dim)
+        }
+    
         return {
             'node_features': node_features,
             'edge_index': edge_index,
             'edge_features': edge_features,
-            'node_mapping': node_mapping
+            'node_mapping': node_mapping,
+            'text_inputs': text_inputs,
+            'tabular_inputs': tabular_inputs,
+            'structured_inputs': structured_inputs
         }
     
     def create_dataset(self, data_dir: str) -> FrankaKGDataset:

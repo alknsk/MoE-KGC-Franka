@@ -44,6 +44,17 @@ class FrankaKGDataset(Dataset):
         else:
             raise ValueError(f"Unknown task: {task}")
     
+        required_keys = [
+            'node_features', 'edge_index', 'edge_features',
+            'text_inputs', 'tabular_inputs', 'structured_inputs', 'node_mapping'
+        ]
+        for key in required_keys:
+            if key not in features:
+                raise KeyError(
+                    f"Missing required feature '{key}' in features dict! "
+                    f"Available keys: {list(features.keys())}"
+                )
+                
     def prepare_link_prediction_data(self):
         """准备链接预测任务的数据"""
         # 正样本（现有边）
@@ -137,8 +148,13 @@ class FrankaKGDataset(Dataset):
                 })
     
     def __len__(self) -> int:
-        """只返回1，表示整个数据集就是一个大图"""
-        return 1
+        # 返回样本数量，而不是 1
+        if self.task == 'link_prediction':
+            return len(self.samples)
+        elif self.task == 'entity_classification':
+            return len(self.samples)
+        elif self.task == 'relation_extraction':
+            return len(self.samples)
     
     def __getitem__(self, idx: int) -> Dict[str, Any]:
         """根据索引获取样本"""
@@ -151,6 +167,7 @@ class FrankaKGDataset(Dataset):
             'tabular_inputs': self.features['tabular_inputs'],    # [num_nodes, ...]
             'structured_inputs': self.features['structured_inputs'], # [num_nodes, ...]
         }
+        
         
         # ----------- 新增：三模态占位 -----------
         # 假设 hidden_dim = self.config.hidden_dim，seq_len = 32，cat_dim = 4
@@ -185,16 +202,47 @@ class FrankaKGDataset(Dataset):
         # 任务相关字段
         if self.task == 'link_prediction':
             # 全部正负样本的 head/tail/label 索引
-            batch_data['head'] = torch.tensor([s['head'] for s in self.samples], dtype=torch.long)
-            batch_data['tail'] = torch.tensor([s['tail'] for s in self.samples], dtype=torch.long)
-            batch_data['label'] = torch.tensor([s['label'] for s in self.samples], dtype=torch.float)
+            sample = self.samples[idx]
+            batch_data = {
+                'node_features': self.features['node_features'],
+                'edge_index': self.features['edge_index'],
+                'edge_features': self.features['edge_features'],
+                'text_inputs': self.features['text_inputs'],
+                'tabular_inputs': self.features['tabular_inputs'],
+                'structured_inputs': self.features['structured_inputs'],
+                'head': torch.tensor([sample['head']], dtype=torch.long),
+                'tail': torch.tensor([sample['tail']], dtype=torch.long),
+                'label': torch.tensor([sample['label']], dtype=torch.float)
+            }
         elif self.task == 'entity_classification':
-            batch_data['node_idx'] = torch.tensor([s['node_idx'] for s in self.samples], dtype=torch.long)
-            batch_data['label'] = torch.tensor([s['label'] for s in self.samples], dtype=torch.long)
+            sample = self.samples[idx]
+            batch_data = {
+                'node_features': self.features['node_features'],
+                'edge_index': self.features['edge_index'],
+                'edge_features': self.features['edge_features'],
+                'text_inputs': self.features['text_inputs'],
+                'tabular_inputs': self.features['tabular_inputs'],
+                'structured_inputs': self.features['structured_inputs'],
+                'node_idx': torch.tensor([sample['node_idx']], dtype=torch.long),
+                'label': torch.tensor([sample['label']], dtype=torch.long)
+            }
         elif self.task == 'relation_extraction':
-            batch_data['head_idx'] = torch.tensor([s['head_idx'] for s in self.samples], dtype=torch.long)
-            batch_data['tail_idx'] = torch.tensor([s['tail_idx'] for s in self.samples], dtype=torch.long)
-            batch_data['relation_type'] = torch.tensor([s['relation_type'] for s in self.samples], dtype=torch.long)
+            sample = self.samples[idx]
+            batch_data = {
+                'node_features': self.features['node_features'],
+                'edge_index': self.features['edge_index'],
+                'edge_features': self.features['edge_features'],
+                'text_inputs': self.features['text_inputs'],
+                'tabular_inputs': self.features['tabular_inputs'],
+                'structured_inputs': self.features['structured_inputs'],
+                'head_idx': torch.tensor([sample['head_idx']], dtype=torch.long),
+                'tail_idx': torch.tensor([sample['tail_idx']], dtype=torch.long),
+                'relation_type': torch.tensor([sample['relation_type']], dtype=torch.long)
+            }
+        
+        # 检查 edge_index 的有效性
+        num_nodes = self.features['node_features'].shape[0]
+        assert self.features['edge_index'].max() < num_nodes, "edge_index 中的节点索引超出了节点数量范围"
         
         return batch_data
     

@@ -4,13 +4,13 @@
 import argparse
 import torch
 # import wandb
-from pathlib import Path
 import json
 import sys
 import os
 
 sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
+from data.dataset import FrankaKGDataset
 from config import get_config
 from data import KGDataLoader
 from models import MoEKGC
@@ -18,7 +18,7 @@ from training import Trainer
 from evaluation import Evaluator, BaselineComparison
 from utils import setup_logger, set_seed, plot_training_history
 from torch_geometric.loader import DataLoader
-
+from pathlib import Path
 
 def main():
     parser = argparse.ArgumentParser(description='MoE-KGC 端到端训练')
@@ -99,22 +99,24 @@ def main():
     # 创建数据加载器
     train_loader = DataLoader(
         train_dataset,
-        batch_size=1,  # 每次一个图/子图
+        batch_size=args.batch_size,
         shuffle=True,
         num_workers=4,
         collate_fn=train_dataset.get_collate_fn()
     )
     val_loader = DataLoader(
         val_dataset,
-        batch_size=1,
+        batch_size=args.batch_size,
         shuffle=False,
-        num_workers=4
+        num_workers=4,
+        collate_fn=val_dataset.get_collate_fn()
     )
     test_loader = DataLoader(
         test_dataset,
-        batch_size=1,
+        batch_size=args.batch_size,
         shuffle=False,
-        num_workers=4
+        num_workers=4,
+        collate_fn=test_dataset.get_collate_fn()
     )
 
     logger.info(f"训练集大小: {len(train_dataset)}")
