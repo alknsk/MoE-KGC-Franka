@@ -3,7 +3,7 @@
 
 import argparse
 import torch
-import wandb
+# import wandb
 from pathlib import Path
 import json
 import sys
@@ -75,12 +75,12 @@ def main():
     logger.info(f"开始实验: {args.exp_name}")
 
     # 初始化wandb
-    if args.use_wandb:
-        wandb.init(
-            project="moe-kgc-franka",
-            name=args.exp_name,
-            config=config.__dict__
-        )
+    #if args.use_wandb:
+    #    wandb.init(
+    #        project="moe-kgc-franka",
+    #        name=args.exp_name,
+    #        config=config.__dict__
+    #    )
 
     # 设备
     device = torch.device(args.device if torch.cuda.is_available() else 'cpu')
@@ -232,8 +232,8 @@ def main():
 
     logger.info(f"实验完成！结果保存在: {exp_dir}")
 
-    if args.use_wandb:
-        wandb.finish()
+    #if args.use_wandb:
+    #    wandb.finish()
 
 
 if __name__ == '__main__':

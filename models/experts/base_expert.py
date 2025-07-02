@@ -72,6 +72,10 @@ class BaseExpert(nn.Module, ABC):
         # Compute expert-specific features
         expert_features = self.compute_expert_features(x, **kwargs)
 
+        print(f"[Expert Debug] {self.__class__.__name__} compute_expert_features output shape: {expert_features.shape}")
+        assert expert_features.shape[1] == self.input_dim, \
+            f"{self.__class__.__name__} compute_expert_features output shape[1]={expert_features.shape[1]}, expected {self.input_dim}"
+        
         # Pass through MLP
         hidden = self.mlp(expert_features)
 

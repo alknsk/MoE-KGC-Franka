@@ -71,6 +71,8 @@ class SafetyExpert(BaseExpert):
             dropout=dropout_rate
         )
     
+        self.safety_feature_projection = nn.Linear((hidden_dims[0] // 3) * 3, input_dim)
+        
     def compute_expert_features(self, x: torch.Tensor, **kwargs) -> torch.Tensor:
         """Compute safety-related features"""
         features = []
@@ -104,16 +106,14 @@ class SafetyExpert(BaseExpert):
         # Combine all safety features
         combined = torch.cat(features, dim=-1)
         
-        # Pad if necessary
-        if combined.size(-1) < x.size(-1):
-            padding = torch.zeros(
-                *combined.shape[:-1], 
-                x.size(-1) - combined.size(-1),
-                device=combined.device
-            )
-            combined = torch.cat([combined, padding], dim=-1)
-        
-        return combined
+        # 补零或截断
+        if combined.shape[-1] < self.safety_feature_projection.in_features:
+            pad = torch.zeros(combined.shape[0], self.safety_feature_projection.in_features - combined.shape[-1], device=combined.device, dtype=combined.dtype)
+            combined = torch.cat([combined, pad], dim=-1)
+        elif combined.shape[-1] > self.safety_feature_projection.in_features:
+            combined = combined[..., :self.safety_feature_projection.in_features]
+        projected = self.safety_feature_projection(combined)
+        return projected
     
     def assess_collision_risk(self, state: torch.Tensor, **kwargs) -> Dict[str, torch.Tensor]:
         """Assess collision risk"""

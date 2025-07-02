@@ -182,6 +182,11 @@ class MoEKGC(nn.Module):
             print("structured_encoded shape:", structured_encoded.shape) # Debugging line
             encoded['structured'] = structured_encoded
             
+        for k in ['text', 'tabular', 'structured']:
+            if k in encoded:
+                assert encoded[k].shape[1] == self.config.expert_hidden_dim, \
+                    f"{k} shape[1] ({encoded[k].shape[1]}) != expert_hidden_dim ({self.config.expert_hidden_dim})"
+        
         return encoded
 
     def apply_experts(self, expert_inputs: Dict[str, torch.Tensor],
@@ -189,19 +194,40 @@ class MoEKGC(nn.Module):
                      expert_gates: torch.Tensor,
                      batch: Dict[str, Any]) -> torch.Tensor:
         """Apply selected experts to encoded features"""
-        batch_size = expert_indices.size(0)
+        num_nodes = expert_indices.size(0)
         output_dim = self.config.hidden_dim
 
+        # dubug：打印所有专家输入 shape
+        for expert_name, expert_input in expert_inputs.items():
+            print(f"[Check] expert_inputs['{expert_name}'] shape: {expert_input.shape}")
+        
         # Initialize output tensor
-        expert_outputs = torch.zeros(batch_size, output_dim, device=expert_gates.device)
+        expert_outputs = torch.zeros(num_nodes, output_dim, device=expert_gates.device)
 
         # Apply each expert
-        for i in range(batch_size):
+        for i in range(num_nodes):
             for j, (expert_idx, gate) in enumerate(zip(expert_indices[i], expert_gates[i])):
+                
+                expert_keys = list(self.experts.keys())
+                print(f"[Debug] expert_idx: {expert_idx}, expert_keys: {expert_keys}")
+                assert expert_idx < len(expert_keys), f"expert_idx {expert_idx} out of range for experts {expert_keys}"
+        
                 expert_name = list(self.experts.keys())[expert_idx]
                 expert = self.experts[expert_name]
                 # 取该 expert 对应的输入
                 expert_input = expert_inputs[expert_name][i:i+1]
+                
+                # 打印和断言
+                print(f"[Debug] expert_input shape for {expert_name}: {expert_input.shape}")
+                assert expert_input.shape[1] == self.config.expert_hidden_dim, \
+                    f"{expert_name} expert_input.shape[1] ({expert_input.shape[1]}) != expert_hidden_dim ({self.config.expert_hidden_dim})"
+                # 检查专家MLP的输入层
+                mlp_in_features = expert.mlp[0].in_features
+                print(f"[Debug] {expert_name} expert MLP in_features: {mlp_in_features}")
+                if expert_input.shape[1] != mlp_in_features:
+                    print(f"[ERROR] {expert_name} expert_input.shape[1]={expert_input.shape[1]}, but mlp_in_features={mlp_in_features}")
+                assert mlp_in_features == self.config.expert_hidden_dim, \
+                    f"{expert_name} expert MLP in_features ({mlp_in_features}) != expert_hidden_dim ({self.config.expert_hidden_dim})"  
                 
                 # Prepare expert-specific inputs
                 expert_kwargs = {}
@@ -257,12 +283,15 @@ class MoEKGC(nn.Module):
         expert_gates = gating_output['gates']
 
         expert_inputs = {
-            'action': encoded['tabular'],      # tabular编码
-            'spatial': encoded['structured'],  # structured编码
-            'temporal': encoded['text'],       # text编码
-            'semantic': encoded['text'],       # text编码
-            'safety': encoded['structured']    # structured编码
+            'action': encoded['tabular'],      # tabular编码 [batch,512]
+            'spatial': encoded['structured'],  # structured编码 [batch,512]
+            'temporal': encoded['text'],       # text编码 [batch,512]
+            'semantic': encoded['text'],       # text编码 [batch,512]
+            'safety': encoded['structured']    # structured编码 [batch,512]
         }
+        
+        print("combined_features shape:", combined_features.shape)  # 应为 [batch, config.expert_hidden_dim * 3]
+        print("expert_inputs['action'] shape:", expert_inputs['action'].shape)  # 应为 [batch, config.expert_hidden_dim]
         
         # Apply selected experts
         expert_outputs = self.apply_experts(

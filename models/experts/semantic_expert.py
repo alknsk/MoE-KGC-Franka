@@ -60,6 +60,8 @@ class SemanticExpert(BaseExpert):
             nn.Linear(hidden_dims[1], 1),
             nn.Sigmoid()
         )
+        
+        self.semantic_feature_projection = nn.Linear((hidden_dims[0] // 2) * 2, input_dim)
     
     def compute_expert_features(self, x: torch.Tensor, **kwargs) -> torch.Tensor:
         """Compute semantic features"""
@@ -91,10 +93,18 @@ class SemanticExpert(BaseExpert):
             
             attended, _ = self.cross_attention(query, key, value)
             attended = attended.transpose(0, 1)
-            
-            return attended
+            combined = attended
         else:
-            return torch.cat(features, dim=-1) if len(features) > 1 else features[0]
+            combined = torch.cat(features, dim=-1) if len(features) > 1 else features[0]
+        
+        # 补零或截断
+        if combined.shape[-1] < self.semantic_feature_projection.in_features:
+            pad = torch.zeros(combined.shape[0], self.semantic_feature_projection.in_features - combined.shape[-1], device=combined.device, dtype=combined.dtype)
+            combined = torch.cat([combined, pad], dim=-1)
+        elif combined.shape[-1] > self.semantic_feature_projection.in_features:
+            combined = combined[..., :self.semantic_feature_projection.in_features]
+        projected = self.semantic_feature_projection(combined)
+        return projected
     
     def classify_semantic_category(self, x: torch.Tensor, **kwargs) -> Dict[str, torch.Tensor]:
         """Classify input into semantic categories"""

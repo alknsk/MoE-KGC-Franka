@@ -58,6 +58,7 @@ class TemporalExpert(BaseExpert):
         
         # Positional encoding
         self.positional_encoding = self._create_positional_encoding()
+        self.temporal_feature_projection = nn.Linear(hidden_dims[0] * 2, input_dim)
     
     def _create_positional_encoding(self) -> torch.Tensor:
         """Create sinusoidal positional encoding"""
@@ -104,12 +105,14 @@ class TemporalExpert(BaseExpert):
             transformer_out = self.transformer(lstm_out)
             transformer_out = transformer_out.transpose(0, 1)  # [batch, seq_len, features]
             
-            return transformer_out
+            pooled = transformer_out.mean(dim=1)  # [batch, 1024]
+            projected = self.temporal_feature_projection(pooled)
+            return projected
         else:
-            # For non-sequential input, expand and process
             x_expanded = x.unsqueeze(1)
             lstm_out, _ = self.lstm(x_expanded)
-            return lstm_out.squeeze(1)
+            projected = self.temporal_feature_projection(lstm_out.squeeze(1))
+            return projected
     
     def predict_temporal_relation(self, seq1: torch.Tensor, seq2: torch.Tensor) -> Dict[str, torch.Tensor]:
         """Predict temporal relation between two sequences"""

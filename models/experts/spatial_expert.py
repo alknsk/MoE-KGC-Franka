@@ -58,6 +58,8 @@ class SpatialExpert(BaseExpert):
             nn.Linear(128, 3 * 4)  # 3x4 affine transformation matrix
         )
     
+        self.spatial_feature_projection = nn.Linear((hidden_dims[0] // 3) * 3, input_dim)  # 3分量最大拼接
+    
     def compute_expert_features(self, x: torch.Tensor, **kwargs) -> torch.Tensor:
         """Compute spatial features"""
         features = []
@@ -85,11 +87,15 @@ class SpatialExpert(BaseExpert):
         if not features:
             return x
         
-        # Combine features
-        if len(features) == 1:
-            return features[0]
-        else:
-            return torch.cat(features, dim=-1)
+        combined = torch.cat(features, dim=-1) if len(features) > 1 else features[0]
+        # 补零或截断
+        if combined.shape[-1] < self.spatial_feature_projection.in_features:
+            pad = torch.zeros(combined.shape[0], self.spatial_feature_projection.in_features - combined.shape[-1], device=combined.device, dtype=combined.dtype)
+            combined = torch.cat([combined, pad], dim=-1)
+        elif combined.shape[-1] > self.spatial_feature_projection.in_features:
+            combined = combined[..., :self.spatial_feature_projection.in_features]
+        projected = self.spatial_feature_projection(combined)
+        return projected
     
     def compute_spatial_relation(self, obj1_features: torch.Tensor, 
                                obj2_features: torch.Tensor) -> Dict[str, torch.Tensor]:

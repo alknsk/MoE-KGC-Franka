@@ -47,6 +47,9 @@ class ActionExpert(BaseExpert):
         # Action classifier head
         self.action_classifier = nn.Linear(output_dim, action_vocab_size)
     
+        # 最多拼接3个分量（这里乘3了）
+        self.action_feature_projection = nn.Linear((hidden_dims[0] // 2) * 3, input_dim)
+        
     def compute_expert_features(self, x: torch.Tensor, **kwargs) -> torch.Tensor:
         """
         Compute action-specific features
@@ -82,14 +85,14 @@ class ActionExpert(BaseExpert):
         # Concatenate all features
         combined_features = torch.cat(features, dim=-1)
         
-        # Apply temporal convolution if sequential
-        if len(combined_features.shape) == 3:
-            # Reshape for conv1d: [batch, channels, length]
-            combined_features = combined_features.transpose(1, 2)
-            combined_features = self.temporal_conv(combined_features)
-            combined_features = combined_features.transpose(1, 2)
-        
-        return combined_features
+        # 补零或截断
+        if combined.shape[-1] < self.action_feature_projection.in_features:
+            pad = torch.zeros(combined.shape[0], self.action_feature_projection.in_features - combined.shape[-1], device=combined.device, dtype=combined.dtype)
+            combined = torch.cat([combined, pad], dim=-1)
+        elif combined.shape[-1] > self.action_feature_projection.in_features:
+            combined = combined[..., :self.action_feature_projection.in_features]
+        projected = self.action_feature_projection(combined)
+        return projected
     
     def predict_action(self, x: torch.Tensor, **kwargs) -> Dict[str, torch.Tensor]:
         """Predict next action"""

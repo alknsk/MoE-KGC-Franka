@@ -69,9 +69,15 @@ class EnhancedGNNLayer(MessagePassing):
         query = self.lin_query(x).view(-1, self.heads, self.out_channels)
         value = self.lin_value(x).view(-1, self.heads, self.out_channels)
         
+        print(f"[DEBUG][Layer] x shape: {x.shape}, edge_index shape: {edge_index.shape}")
+        if edge_attr is not None:
+            print(f"[DEBUG][Layer] edge_attr shape: {edge_attr.shape}")
+        
         # Propagate
         out = self.propagate(edge_index, query=query, key=key, value=value, 
                            edge_attr=edge_attr, size=None)
+        
+        print(f"[DEBUG][Layer] after propagate, out shape: {out.shape}")
         
         # Reshape and project
         if self.concat:
@@ -171,8 +177,22 @@ class EnhancedGNN(nn.Module):
             edge_attr: Edge features [num_edges, edge_dim]
             batch: Batch assignment [num_nodes]
         """
+        print(f"[DEBUG] input x shape: {x.shape}")
+        print(f"[DEBUG] edge_index shape: {edge_index.shape}, max: {edge_index.max().item()}, min: {edge_index.min().item()}")
+        assert edge_index.max().item() < x.shape[0], (
+            f"edge_index.max()={edge_index.max().item()} >= x.shape[0]={x.shape[0]}"
+        )
+        assert edge_index.min().item() >= 0, (
+            f"edge_index.min()={edge_index.min().item()} < 0"
+        )
+        if batch is not None:
+            print(f"[DEBUG] batch shape: {batch.shape}, batch.max: {batch.max().item()}, batch.min: {batch.min().item()}")
+        if edge_attr is not None:
+            print(f"[DEBUG] edge_attr shape: {edge_attr.shape}")
+        
         # Initial projection
         x = self.input_proj(x)
+        print(f"[DEBUG] after input_proj, x shape: {x.shape}")
         
         # Process edge features
         if edge_attr is not None and self.edge_proj is not None:
@@ -184,10 +204,12 @@ class EnhancedGNN(nn.Module):
         # Apply GNN layers
         for layer in self.gnn_layers:
             x = layer(x, edge_index, edge_attr)
+            print(f"[DEBUG] after GNN layer {i}, x shape: {x.shape}, x.mean: {x.mean().item():.4f}")
             layer_outputs.append(x)
         
         # Graph-level pooling
         if batch is not None:
+            print(f"[DEBUG] before pooling, x shape: {x.shape}, batch shape: {batch.shape}")
             # Multiple pooling strategies
             mean_pool = global_mean_pool(x, batch)
             max_pool = global_max_pool(x, batch)
@@ -199,6 +221,7 @@ class EnhancedGNN(nn.Module):
             # Concatenate different pooling
             graph_repr = torch.cat([mean_pool, max_pool, gated_pool], dim=-1)
         else:
+            print(f"[DEBUG] before pooling, x shape: {x.shape} (single graph)")
             # Single graph
             mean_pool = x.mean(dim=0, keepdim=True)
             max_pool = x.max(dim=0, keepdim=True)[0]
