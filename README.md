@@ -105,7 +105,7 @@ F1 分数曲线
 ### 2.1 初始结果查看
 
 python
-运行
+
 ```bash
 # 查看最后50行日志
 tail -n 50 experiments/my_first_experiment/logs/*.log
