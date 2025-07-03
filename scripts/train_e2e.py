@@ -9,6 +9,8 @@ import sys
 import os
 
 sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+# os.environ["CUDA_VISIBLE_DEVICES"] = "1,2,3,4,5"
+os.environ["PYTORCH_CUDA_ALLOC_CONF"] = "max_split_size_mb:512"
 
 from data.dataset import FrankaKGDataset
 from config import get_config
@@ -38,7 +40,7 @@ def main():
                         help='训练任务')
     parser.add_argument('--epochs', type=int, default=100,
                         help='训练轮数')
-    parser.add_argument('--batch_size', type=int, default=32,
+    parser.add_argument('--batch_size', type=int, default=8,
                         help='批次大小')
     parser.add_argument('--lr', type=float, default=1e-4,
                         help='学习率')
@@ -54,6 +56,12 @@ def main():
                         help='仅评估模式')
     parser.add_argument('--checkpoint', type=str, default=None,
                         help='从检查点恢复')
+    parser.add_argument('--num_neighbors', type=int, nargs='+', default=[25, 10],
+                        help='邻居采样数量 (例如: --num_neighbors 25 10)')
+    parser.add_argument('--sampling_method', type=str, default='neighbor',
+                        choices=['neighbor', 'cluster', 'random'],
+                        help='子图采样方法')
+    
 
     args = parser.parse_args()
 

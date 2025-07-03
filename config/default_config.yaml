@@ -10,7 +10,7 @@ model:
 
 # mini-batch数据加载配置
 dataloader:
-  batch_size: 32
+  batch_size: 4
   num_neighbors: [25, 10]  # 每层采样的邻居数
   sampling_method: "neighbor"  # neighbor, cluster, graphsaint
   num_workers: 4
@@ -59,7 +59,7 @@ graph:
 
 # 训练配置
 training:
-  batch_size: 32 # 批次大小
+  batch_size: 4 # 批次大小
   learning_rate: 1e-4 # 学习率
   weight_decay: 1e-5 # 权重衰减
   epochs: 100 # 训练轮数
@@ -68,8 +68,8 @@ training:
   scheduler: "cosine" # 学习率调度器
 
   # Mini-batch特定配置
-  accumulation_steps: 1  # 梯度累积
-  mixed_precision: false  # 混合精度训练
+  accumulation_steps: 4  # 梯度累积（目前试试4，如果不行再加）
+  mixed_precision: true  # 混合精度训练
   empty_cache_freq: 10  # 清理GPU缓存频率
   
   # 正则化
@@ -77,7 +77,7 @@ training:
 
 # 数据配置
 data:
-  max_seq_length: 512 # 最大序列长度
+  max_seq_length: 256 # 最大序列长度
   vocab_size: 30522  # 词汇表大小
   num_relations: 50 # 关系数量
   num_entity_types: 20 # 实体类型数量

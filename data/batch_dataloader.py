@@ -1,6 +1,6 @@
 import torch
 from torch_geometric.data import Data, Batch
-from torch_geometric.loader import NeighborLoader, ClusterData, ClusterLoader
+from torch_geometric.loader import NeighborLoader, ClusterData, ClusterLoader, LinkNeighborLoader
 from torch_geometric.utils import negative_sampling
 import numpy as np
 from typing import Dict, List, Optional, Tuple, Union
@@ -13,7 +13,7 @@ class MoEKGCBatchDataLoader:
     """
     def __init__(self, 
                  pyg_data: Data,
-                 batch_size: int = 32,
+                 batch_size: int = 8,
                  num_neighbors: List[int] = [25, 10],
                  sampling_method: str = 'neighbor',
                  num_workers: int = 4,
@@ -57,7 +57,6 @@ class MoEKGCBatchDataLoader:
         elif self.mode == 'test' and hasattr(self.pyg_data, 'test_edge_index'):
             edge_label_index = self.pyg_data.test_edge_index
         else:
-            # 如果没有预定义的分割，使用所有边
             edge_label_index = self.pyg_data.edge_index
             
         # 创建正样本标签
@@ -72,44 +71,16 @@ class MoEKGCBatchDataLoader:
         neg_edge_label = torch.zeros(neg_edge_index.size(1))
         
         # 合并正负样本
-        self.pyg_data.edge_label_index = torch.cat([edge_label_index, neg_edge_index], dim=1)
-        self.pyg_data.edge_label = torch.cat([pos_edge_label, neg_edge_label])
+        edge_label_index = torch.cat([edge_label_index, neg_edge_index], dim=1)
+        edge_label = torch.cat([pos_edge_label, neg_edge_label])
         
-        # 使用NeighborLoader进行子图采样
-        loader = NeighborLoader(
+        # 使用LinkNeighborLoader
+        loader = LinkNeighborLoader(
             data=self.pyg_data,
             num_neighbors=self.num_neighbors,
             batch_size=self.batch_size,
-            edge_label_index=self.pyg_data.edge_label_index,
-            edge_label=self.pyg_data.edge_label,
-            shuffle=self.shuffle,
-            num_workers=self.num_workers,
-            transform=self._transform_batch
-        )
-        
-        return loader
-    
-    def get_node_classification_loader(self):
-        """节点分类任务的批处理加载器"""
-        # 获取有标签的节点
-        if self.mode == 'train' and hasattr(self.pyg_data, 'train_mask'):
-            mask = self.pyg_data.train_mask
-        elif self.mode == 'val' and hasattr(self.pyg_data, 'val_mask'):
-            mask = self.pyg_data.val_mask
-        elif self.mode == 'test' and hasattr(self.pyg_data, 'test_mask'):
-            mask = self.pyg_data.test_mask
-        else:
-            # 使用所有节点
-            mask = torch.ones(self.pyg_data.num_nodes, dtype=torch.bool)
-            
-        node_indices = mask.nonzero(as_tuple=False).view(-1)
-        
-        # 使用NeighborLoader
-        loader = NeighborLoader(
-            self.pyg_data,
-            num_neighbors=self.num_neighbors,
-            batch_size=self.batch_size,
-            input_nodes=node_indices,
+            edge_label_index=edge_label_index,
+            edge_label=edge_label,
             shuffle=self.shuffle,
             num_workers=self.num_workers,
             transform=self._transform_batch

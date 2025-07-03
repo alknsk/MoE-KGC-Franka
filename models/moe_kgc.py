@@ -20,13 +20,23 @@ class MoEKGC(nn.Module):
         super().__init__()
         self.config = config
 
+        # 主干各部分进行并行计算
+        encoder_devices = [
+            torch.device('cuda:0'),  # text_encoder
+            torch.device('cuda:1'),  # tabular_encoder
+            torch.device('cuda:2'),  # structured_encoder
+            torch.device('cuda:3'),  # gating
+            torch.device('cuda:4'),  # gnn
+            torch.device('cuda:5'),  # heads
+        ]
+        
         # Initialize encoders
         self.text_encoder = TextEncoder(
             model_name="bert-base-uncased",
-            hidden_dim=config.hidden_dim,#删去model
-            output_dim=config.expert_hidden_dim,#删去model
-            dropout_rate=config.dropout_rate#删去model
-        )
+            hidden_dim=config.hidden_dim,
+            output_dim=config.expert_hidden_dim,
+            dropout_rate=config.dropout_rate
+        ).to(encoder_devices[0])
 
         self.tabular_encoder = TabularEncoder(
             numerical_features=['joint_positions', 'gripper_state', 'force_torque'],
@@ -38,7 +48,7 @@ class MoEKGC(nn.Module):
             hidden_dims=[config.expert_hidden_dim, config.expert_hidden_dim // 2],
             output_dim=config.expert_hidden_dim,
             dropout_rate=config.dropout_rate
-        )
+        ).to(encoder_devices[1])
 
         self.structured_encoder = StructuredEncoder(
             input_dim=256,  # Placeholder
@@ -46,8 +56,10 @@ class MoEKGC(nn.Module):
             output_dim=config.expert_hidden_dim,
             dropout_rate=config.dropout_rate,
             use_graph_structure=True
-        )
+        ).to(encoder_devices[2])
 
+        expert_devices = [torch.device(f'cuda:{i}') for i in range(1, 6)]  # 1~5号卡
+        
         # Initialize experts
         expert_input_dim = config.expert_hidden_dim
         self.experts = nn.ModuleDict({
@@ -58,7 +70,7 @@ class MoEKGC(nn.Module):
                 dropout_rate=config.dropout_rate,
                 use_attention=config.experts['action_expert'].use_attention,
                 num_joints=config.franka.joint_dim
-            ),
+            ).to(expert_devices[0]),# 给每个专家分配不同的卡进行计算
             'spatial': SpatialExpert(
                 input_dim=expert_input_dim,
                 hidden_dims=config.experts['spatial_expert'].hidden_dims,
@@ -66,14 +78,14 @@ class MoEKGC(nn.Module):
                 dropout_rate=config.dropout_rate,
                 use_attention=config.experts['spatial_expert'].use_attention,
                 workspace_dim=3
-            ),
+            ).to(expert_devices[1]),
             'temporal': TemporalExpert(
                 input_dim=expert_input_dim,
                 hidden_dims=config.experts['temporal_expert'].hidden_dims,
                 output_dim=config.hidden_dim,
                 dropout_rate=config.dropout_rate,
                 use_attention=config.experts['temporal_expert'].use_attention
-            ),
+            ).to(expert_devices[2]),
             'semantic': SemanticExpert(
                 input_dim=expert_input_dim,
                 hidden_dims=config.experts['semantic_expert'].hidden_dims,
@@ -81,14 +93,14 @@ class MoEKGC(nn.Module):
                 dropout_rate=config.dropout_rate,
                 use_attention=config.experts['semantic_expert'].use_attention,
                 vocab_size=config.data.vocab_size
-            ),
+            ).to(expert_devices[3]),
             'safety': SafetyExpert(
                 input_dim=expert_input_dim,
                 hidden_dims=config.experts['safety_expert'].hidden_dims,
                 output_dim=config.hidden_dim,
                 dropout_rate=config.dropout_rate,
                 use_attention=config.experts['safety_expert'].use_attention
-            )
+            ).to(expert_devices[4])
         })
 
         # Initialize gating mechanism
@@ -100,7 +112,7 @@ class MoEKGC(nn.Module):
             noise_std=config.gating.noise_std,
             top_k=config.gating.top_k,
             load_balancing_weight=config.gating.load_balancing_weight
-        )
+        ).to(encoder_devices[3])
 
         # Initialize GNN
         self.gnn = EnhancedGNN(
@@ -110,7 +122,7 @@ class MoEKGC(nn.Module):
             num_layers=config.graph.num_layers,
             edge_dim=config.graph.edge_hidden_dim if config.graph.use_edge_features else None,
             dropout=config.dropout_rate
-        )
+        ).to(encoder_devices[4])
 
         # Initialize graph fusion
         self.graph_fusion = GraphFusion(
@@ -119,7 +131,7 @@ class MoEKGC(nn.Module):
             output_dim=config.hidden_dim,
             fusion_type='attention',
             dropout=config.dropout_rate
-        )
+        ).to(encoder_devices[4])
 
         # Initialize task heads
         self.link_prediction_head = LinkPredictionHead(
@@ -128,21 +140,21 @@ class MoEKGC(nn.Module):
             hidden_dim=config.hidden_dim,
             num_relations=config.data.num_relations,
             dropout=config.dropout_rate
-        )
+        ).to(encoder_devices[5])
 
         self.entity_classification_head = EntityClassificationHead(
             input_dim=config.hidden_dim,
             num_classes=config.data.num_entity_types,
             hidden_dims=[config.hidden_dim, config.hidden_dim // 2],
             dropout=config.dropout_rate
-        )
+        ).to(encoder_devices[5])
 
         self.relation_extraction_head = RelationExtractionHead(
             entity_dim=config.hidden_dim,
             num_relations=config.data.num_relations,
             hidden_dim=config.hidden_dim,
             dropout=config.dropout_rate
-        )
+        ).to(encoder_devices[5])
 
     def encode_multimodal_input(self, batch: Dict[str, Any]) -> Dict[str, torch.Tensor]:
         """Encode different modalities of input data"""
@@ -161,37 +173,36 @@ class MoEKGC(nn.Module):
                 f"input_ids shape must be [num_nodes, seq_len], got {batch['text_inputs']['input_ids'].shape}"
             assert batch['text_inputs']['attention_mask'].dim() == 2, \
                 f"attention_mask shape must be [num_nodes, seq_len], got {batch['text_inputs']['attention_mask'].shape}"
-            text_encoded = self.text_encoder(
-                batch['text_inputs']['input_ids'],
-                batch['text_inputs']['attention_mask']
-            )
+            text_input_ids = batch['text_inputs']['input_ids'].to(next(self.text_encoder.parameters()).device)
+            text_attention_mask = batch['text_inputs']['attention_mask'].to(next(self.text_encoder.parameters()).device)
+            text_encoded = self.text_encoder(text_input_ids, text_attention_mask)
             print("text_encoded shape:", text_encoded.shape)  # Debugging line
-            encoded['text'] = text_encoded
+            encoded['text'] = text_encoded.to(next(self.gating.parameters()).device)  # gating下一步用
 
         # Encode tabular data if available
         if 'tabular_inputs' in batch:
-            tabular_encoded = self.tabular_encoder(
-                batch['tabular_inputs']['numerical'],
-                batch['tabular_inputs']['categorical']
-            )
+            tabular_num = batch['tabular_inputs']['numerical'].to(next(self.tabular_encoder.parameters()).device)
+            tabular_cat = batch['tabular_inputs']['categorical']  # 如有必要递归to
+            tabular_encoded = self.tabular_encoder(tabular_num, tabular_cat)
+            encoded['tabular'] = tabular_encoded.to(next(self.gating.parameters()).device)
             print("tabular_encoded shape:", tabular_encoded.shape) # Debugging line
-            encoded['tabular'] = tabular_encoded
 
         elif 'node_features' in batch:
             # 只有没有tabular_inputs时才用node_features
             print("node_features shape:", batch['node_features'].shape)
             # 这里建议只在特殊情况用，并确保shape为(batch, D)
-            encoded['tabular'] = batch['node_features']
+            encoded['tabular'] = batch['node_features'].to(next(self.gating.parameters()).device)
         
         # Encode structured data if available
         if 'structured_inputs' in batch:
-            structured_encoded = self.structured_encoder(
-                batch['structured_inputs']['task_features'],
-                batch['structured_inputs']['constraint_features'],
-                batch['structured_inputs']['safety_features']
-            )
+            struct_task = batch['structured_inputs']['task_features'].to(next(self.structured_encoder.parameters()).device)
+            struct_constraint = batch['structured_inputs']['constraint_features'].to(next(self.structured_encoder.parameters()).device)
+            struct_safety = batch['structured_inputs']['safety_features'].to(next(self.structured_encoder.parameters()).device)
+            structured_encoded = self.structured_encoder(struct_task, struct_constraint, struct_safety)
+            
             print("structured_encoded shape:", structured_encoded.shape) # Debugging line
-            encoded['structured'] = structured_encoded
+            
+            encoded['structured'] = structured_encoded.to(next(self.gating.parameters()).device)
             
         for k in ['text', 'tabular', 'structured']:
             if k in encoded:
@@ -289,6 +300,7 @@ class MoEKGC(nn.Module):
         gating_output = self.gating(combined_features)
         expert_indices = gating_output['indices']
         expert_gates = gating_output['gates']
+        # gating_output['gates'] 在 gating.device 上，后续要搬到 experts/gnn 所在卡
         
         # 准备专家输入
         expert_inputs = self._prepare_expert_inputs(encoded)
@@ -304,8 +316,8 @@ class MoEKGC(nn.Module):
             node_embeddings = gnn_output['node_embeddings']
             graph_embedding = gnn_output['graph_embedding']
         else:
-            node_embeddings = expert_outputs
-            graph_embedding = expert_outputs.mean(dim=0, keepdim=True)
+            node_embeddings = expert_outputs.to(next(self.link_prediction_head.parameters()).device)
+            graph_embedding =  expert_outputs.mean(dim=0, keepdim=True).to(next(self.link_prediction_head.parameters()).device)
         
         # 任务特定的输出头
         output = self._apply_task_head(node_embeddings, batch_dict, task)
@@ -362,7 +374,7 @@ class MoEKGC(nn.Module):
         """批处理版本的专家应用"""
         batch_size = expert_indices.size(0)
         output_dim = self.config.hidden_dim
-        device = expert_gates.device
+        device = self.gnn.device
         
         # 初始化输出
         expert_outputs = torch.zeros(batch_size, output_dim, device=device)
@@ -371,6 +383,7 @@ class MoEKGC(nn.Module):
         for expert_idx in range(self.config.num_experts):
             expert_name = list(self.experts.keys())[expert_idx]
             expert = self.experts[expert_name]
+            expert_device = next(expert.parameters()).device
             
             # 找出选择了这个专家的样本
             mask = (expert_indices == expert_idx).any(dim=1)
@@ -378,33 +391,34 @@ class MoEKGC(nn.Module):
                 continue
             
             # 获取对应的输入
-            expert_input = expert_inputs[expert_name][mask]
+            expert_input = expert_inputs[expert_name][mask].to(expert_device) # 搬运输入到expert所在设备
             
             # 准备专家特定的参数
             expert_kwargs = {}
             if expert_name == 'action' and 'joint_positions' in batch:
-                expert_kwargs['joint_positions'] = batch['joint_positions'][mask]
+                expert_kwargs['joint_positions'] = batch['joint_positions'][mask].to(expert_device)# 搬运kwargs到对应设备
             elif expert_name == 'spatial' and 'positions' in batch:
-                expert_kwargs['positions'] = batch['positions'][mask]
+                expert_kwargs['positions'] = batch['positions'][mask].to(expert_device)# 搬运kwargs到对应设备
             elif expert_name == 'temporal' and 'timestamps' in batch:
-                expert_kwargs['timestamps'] = batch['timestamps'][mask]
+                expert_kwargs['timestamps'] = batch['timestamps'][mask].to(expert_device)# 搬运kwargs到对应设备
             
             # 应用专家
-            with torch.cuda.amp.autocast(enabled=False):  # 避免混合精度问题
-                expert_output = expert(expert_input, **expert_kwargs)
+            # with torch.cuda.amp.autocast(enabled=False):  # 避免混合精度问题
+            expert_output = expert(expert_input, **expert_kwargs)
             
             # 获取对应的门控权重
             expert_gate_weights = expert_gates[mask]
             gate_idx = (expert_indices[mask] == expert_idx).float()
             weights = (expert_gate_weights * gate_idx).sum(dim=1, keepdim=True)
             
-            # 加权输出
-            expert_outputs[mask] += weights * expert_output
+        # expert_output直接搬到gnn卡中计算，再加权输出
+        expert_outputs[mask] += weights * expert_output.to(device)
         
         return expert_outputs
 
     def _apply_gnn_batch(self, node_features: torch.Tensor, batch_dict: Dict[str, Any]) -> Dict[str, torch.Tensor]:
         """批处理GNN应用"""
+        node_features = node_features.to(next(self.gnn.parameters()).device)
         edge_index = batch_dict['edge_index']
         batch_idx = batch_dict.get('batch_idx', torch.zeros(node_features.size(0), dtype=torch.long, device=node_features.device))
         
@@ -422,7 +436,10 @@ class MoEKGC(nn.Module):
             batch_idx
         )
         
-        return gnn_output
+        return {
+            'node_embeddings': gnn_output['node_embeddings'].to(next(self.link_prediction_head.parameters()).device),
+            'graph_embedding': gnn_output['graph_embedding'].to(next(self.link_prediction_head.parameters()).device)
+        }
 
     def _combine_encoded_features(self, encoded: Dict[str, torch.Tensor]) -> torch.Tensor:
         """合并编码特征"""
@@ -439,7 +456,9 @@ class MoEKGC(nn.Module):
         for f in features:
             assert f.size(0) == batch_size, f"Inconsistent batch size: {f.size(0)} vs {batch_size}"
         
-        return torch.cat(features, dim=-1)
+        combined = torch.cat(features, dim=-1)
+        
+        return combined.to(next(self.gating.parameters()).device)
 
     def _prepare_expert_inputs(self, encoded: Dict[str, torch.Tensor]) -> Dict[str, torch.Tensor]:
         """准备专家输入，确保每个专家都有输入"""
@@ -478,3 +497,15 @@ class MoEKGC(nn.Module):
         for encoder in [self.text_encoder, self.tabular_encoder, self.structured_encoder]:
             for param in encoder.parameters():
                 param.requires_grad = True
+                
+    def _apply_task_head(self, node_embeddings, batch_dict, task):
+        # 统一搬到head所在卡
+        node_embeddings = node_embeddings.to(next(self.link_prediction_head.parameters()).device)
+        if task == 'link_prediction':
+            return self.link_prediction_head(node_embeddings, ...)
+        elif task == 'entity_classification':
+            return self.entity_classification_head(node_embeddings, ...)
+        elif task == 'relation_extraction':
+            return self.relation_extraction_head(node_embeddings, ...)
+        else:
+            raise ValueError(f"Unknown task: {task}")

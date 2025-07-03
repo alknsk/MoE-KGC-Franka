@@ -3,8 +3,9 @@
 # Mini-batch训练脚本
 
 # 设置环境变量
-export CUDA_VISIBLE_DEVICES=0
+export CUDA_VISIBLE_DEVICES=0,1,2,3,4,5
 export PYTHONPATH="${PYTHONPATH}:$(pwd)"
+export PYTORCH_CUDA_ALLOC_CONF=expandable_segments:True
 
 # 参数设置
 DATA_DIR="./data"
@@ -12,7 +13,7 @@ CONFIG="./config/default_config.yaml"
 EXP_NAME="moe_kgc_batch_experiment"
 TASK="link_prediction"
 EPOCHS=100
-BATCH_SIZE=32
+BATCH_SIZE=4 # 先改为4，目前来看8根本跑不动
 LR=0.001
 
 # Mini-batch参数

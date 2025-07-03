@@ -98,7 +98,9 @@ class BaseExpert(nn.Module, ABC):
                 output = (output * mask_expanded).sum(dim=1) / mask_expanded.sum(dim=1)
             else:
                 output = output.mean(dim=1)
-
+                
+        print(f"[Expert Debug] input dtype: {expert_features.dtype}, mlp weight dtype: {self.mlp[0].weight.dtype}")
+        
         return output
 
     def get_expert_confidence(self, x: torch.Tensor, **kwargs) -> torch.Tensor:

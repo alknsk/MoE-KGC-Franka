@@ -4,6 +4,7 @@ from torch.optim import AdamW
 from torch.optim.lr_scheduler import CosineAnnealingLR, ReduceLROnPlateau
 # from torch.utils.data import DataLoader
 from torch_geometric.loader import DataLoader
+from torch.cuda.amp import autocast, GradScaler
 from typing import Dict, Optional, List, Tuple, Any
 import numpy as np
 from tqdm import tqdm
@@ -24,7 +25,9 @@ class Trainer:
         self.model = model
         self.config = config
         self.device = device or torch.device('cuda' if torch.cuda.is_available() else 'cpu')
-        self.model.to(self.device)
+        # self.model.to(self.device)
+        self.use_amp = getattr(config.training, 'mixed_precision', False)
+        self.scaler = GradScaler(enabled=self.use_amp)
         
         print("weight_decay:", config.training.weight_decay, type(config.training.weight_decay))
         
@@ -85,10 +88,10 @@ class Trainer:
                 batch = self._move_batch_to_device(batch)
             
             # 梯度累积
-            is_accumulation_step = (batch_idx + 1) % self.config.training.get('accumulation_steps', 1) != 0
+            is_accumulation_step = (batch_idx + 1) % getattr(self.config.training, 'accumulation_steps', 1) != 0
             
             # 混合精度训练
-            with torch.cuda.amp.autocast(enabled=self.config.training.get('mixed_precision', False)):
+            with torch.cuda.amp.autocast(enabled = getattr(self.config.training,'mixed_precision', False)):
                 # 前向传播
                 outputs = self.model(batch, task=task)
                 
@@ -98,29 +101,36 @@ class Trainer:
                 
                 # 添加门控损失
                 if 'gating_loss' in outputs:
-                    gating_weight = self.config.training.get('gating_loss_weight', 0.01)
+                    gating_weight = getattr(self.config.training, 'gating_loss_weight', 0.01)
                     total_loss = total_loss + gating_weight * outputs['gating_loss']
             
             # 梯度累积归一化
-            if self.config.training.get('accumulation_steps', 1) > 1:
-                total_loss = total_loss / self.config.training.get('accumulation_steps', 1)
+            if getattr(self.config.training, 'accumulation_steps', 1) > 1:
+                total_loss = total_loss / getattr(self.config.training, 'accumulation_steps', 1)
             
             # 反向传播
-            total_loss.backward()
+            if self.use_amp:
+                self.scaler.scale(total_loss).backward()
+            else:
+                total_loss.backward()
             
             if not is_accumulation_step:
-                # 梯度裁剪
                 if self.config.training.gradient_clip > 0:
+                    if self.use_amp:
+                        self.scaler.unscale_(self.optimizer)
                     torch.nn.utils.clip_grad_norm_(
                         self.model.parameters(), 
                         self.config.training.gradient_clip
                     )
-                
-                self.optimizer.step()
+                if self.use_amp:
+                    self.scaler.step(self.optimizer)
+                    self.scaler.update()
+                else:
+                    self.optimizer.step()
                 self.optimizer.zero_grad()
             
             # 更新指标
-            epoch_losses.append(total_loss.item() * self.config.training.get('accumulation_steps', 1))
+            epoch_losses.append(total_loss.item() * getattr(self.config.training, 'accumulation_steps', 1))
             
             with torch.no_grad():
                 # 确保outputs和batch都在同一设备上
@@ -135,7 +145,7 @@ class Trainer:
             })
             
             # 定期清理GPU内存
-            if batch_idx % self.config.training.get('empty_cache_freq', 10) == 0 and torch.cuda.is_available():
+            if batch_idx % getattr(self.config.training, 'empty_cache_freq', 10) == 0 and torch.cuda.is_available():
                 torch.cuda.empty_cache()
             
             self.global_step += 1
@@ -240,7 +250,11 @@ class Trainer:
         
         # Save final model
         self.save_checkpoint(save_dir / 'final_model.pt')
-        
+        # 如果没有best_model.pt，则复制一份
+        import shutil
+        best_model_path = save_dir / 'best_model.pt'
+        if not best_model_path.exists():
+            shutil.copy(save_dir / 'final_model.pt', best_model_path)
         return history
     
     def save_checkpoint(self, path: str):

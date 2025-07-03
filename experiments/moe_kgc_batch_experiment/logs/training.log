@@ -1,28 +1,116 @@
-2025-07-03 04:59:13 - moe_kgc - INFO - Logging to experiments/moe_kgc_batch_experiment/logs/moe_kgc_20250703_045913.log
-2025-07-03 04:59:13 - moe_kgc - INFO - 开始实验: moe_kgc_batch_experiment
-2025-07-03 04:59:13 - moe_kgc - INFO - 使用设备: cuda
-2025-07-03 04:59:13 - moe_kgc - INFO - 加载数据...
-2025-07-03 04:59:13 - moe_kgc - INFO - 加载预处理的PyG数据...
-/home2/yanghaochen/MoE_franka/scripts/train_e2e.py:101: FutureWarning: You are using `torch.load` with `weights_only=False` (the current default value), which uses the default pickle module implicitly. It is possible to construct malicious pickle data which will execute arbitrary code during unpickling (See https://github.com/pytorch/pytorch/blob/main/SECURITY.md#untrusted-models for more details). In a future release, the default value for `weights_only` will be flipped to `True`. This limits the functions that could be executed during unpickling. Arbitrary objects will no longer be allowed to be loaded via this mode unless they are explicitly allowlisted by the user via `torch.serialization.add_safe_globals`. We recommend you start setting `weights_only=True` for any use case where you don't have full control of the loaded file. Please open an issue on GitHub for any issues related to this experimental feature.
+2025-07-03 09:17:21 - moe_kgc - INFO - Logging to experiments/moe_kgc_batch_experiment/logs/moe_kgc_20250703_091721.log
+2025-07-03 09:17:21 - moe_kgc - INFO - 开始实验: moe_kgc_batch_experiment
+2025-07-03 09:17:21 - moe_kgc - INFO - 使用设备: cuda
+2025-07-03 09:17:21 - moe_kgc - INFO - 加载数据...
+2025-07-03 09:17:21 - moe_kgc - INFO - 加载预处理的PyG数据...
+/home2/yanghaochen/MoE_franka/scripts/train_e2e.py:109: FutureWarning: You are using `torch.load` with `weights_only=False` (the current default value), which uses the default pickle module implicitly. It is possible to construct malicious pickle data which will execute arbitrary code during unpickling (See https://github.com/pytorch/pytorch/blob/main/SECURITY.md#untrusted-models for more details). In a future release, the default value for `weights_only` will be flipped to `True`. This limits the functions that could be executed during unpickling. Arbitrary objects will no longer be allowed to be loaded via this mode unless they are explicitly allowlisted by the user via `torch.serialization.add_safe_globals`. We recommend you start setting `weights_only=True` for any use case where you don't have full control of the loaded file. Please open an issue on GitHub for any issues related to this experimental feature.
   train_data = torch.load(train_pyg_path)
-/home2/yanghaochen/MoE_franka/scripts/train_e2e.py:102: FutureWarning: You are using `torch.load` with `weights_only=False` (the current default value), which uses the default pickle module implicitly. It is possible to construct malicious pickle data which will execute arbitrary code during unpickling (See https://github.com/pytorch/pytorch/blob/main/SECURITY.md#untrusted-models for more details). In a future release, the default value for `weights_only` will be flipped to `True`. This limits the functions that could be executed during unpickling. Arbitrary objects will no longer be allowed to be loaded via this mode unless they are explicitly allowlisted by the user via `torch.serialization.add_safe_globals`. We recommend you start setting `weights_only=True` for any use case where you don't have full control of the loaded file. Please open an issue on GitHub for any issues related to this experimental feature.
+/home2/yanghaochen/MoE_franka/scripts/train_e2e.py:110: FutureWarning: You are using `torch.load` with `weights_only=False` (the current default value), which uses the default pickle module implicitly. It is possible to construct malicious pickle data which will execute arbitrary code during unpickling (See https://github.com/pytorch/pytorch/blob/main/SECURITY.md#untrusted-models for more details). In a future release, the default value for `weights_only` will be flipped to `True`. This limits the functions that could be executed during unpickling. Arbitrary objects will no longer be allowed to be loaded via this mode unless they are explicitly allowlisted by the user via `torch.serialization.add_safe_globals`. We recommend you start setting `weights_only=True` for any use case where you don't have full control of the loaded file. Please open an issue on GitHub for any issues related to this experimental feature.
   val_data = torch.load(val_pyg_path) if val_pyg_path.exists() else None
-/home2/yanghaochen/MoE_franka/scripts/train_e2e.py:103: FutureWarning: You are using `torch.load` with `weights_only=False` (the current default value), which uses the default pickle module implicitly. It is possible to construct malicious pickle data which will execute arbitrary code during unpickling (See https://github.com/pytorch/pytorch/blob/main/SECURITY.md#untrusted-models for more details). In a future release, the default value for `weights_only` will be flipped to `True`. This limits the functions that could be executed during unpickling. Arbitrary objects will no longer be allowed to be loaded via this mode unless they are explicitly allowlisted by the user via `torch.serialization.add_safe_globals`. We recommend you start setting `weights_only=True` for any use case where you don't have full control of the loaded file. Please open an issue on GitHub for any issues related to this experimental feature.
+/home2/yanghaochen/MoE_franka/scripts/train_e2e.py:111: FutureWarning: You are using `torch.load` with `weights_only=False` (the current default value), which uses the default pickle module implicitly. It is possible to construct malicious pickle data which will execute arbitrary code during unpickling (See https://github.com/pytorch/pytorch/blob/main/SECURITY.md#untrusted-models for more details). In a future release, the default value for `weights_only` will be flipped to `True`. This limits the functions that could be executed during unpickling. Arbitrary objects will no longer be allowed to be loaded via this mode unless they are explicitly allowlisted by the user via `torch.serialization.add_safe_globals`. We recommend you start setting `weights_only=True` for any use case where you don't have full control of the loaded file. Please open an issue on GitHub for any issues related to this experimental feature.
   test_data = torch.load(test_pyg_path) if test_pyg_path.exists() else None
-2025-07-03 04:59:13 - moe_kgc - INFO - 创建mini-batch数据加载器...
+2025-07-03 09:17:21 - moe_kgc - INFO - 创建mini-batch数据加载器...
 /home2/yanghaochen/anaconda3/envs/franka/lib/python3.12/site-packages/torch_geometric/sampler/neighbor_sampler.py:50: UserWarning: Using '{self.__class__.__name__}' without a 'pyg-lib' installation is deprecated and will be removed soon. Please install 'pyg-lib' for accelerated neighborhood sampling
   warnings.warn("Using '{self.__class__.__name__}' without a "
+2025-07-03 09:17:21 - moe_kgc - INFO - 数据加载完成:
+2025-07-03 09:17:21 - moe_kgc - INFO -   训练批次数: 7827
+2025-07-03 09:17:21 - moe_kgc - INFO -   验证批次数: 534
+2025-07-03 09:17:21 - moe_kgc - INFO -   测试批次数: 509
+2025-07-03 09:17:21 - moe_kgc - INFO - 初始化模型...
+/home2/yanghaochen/anaconda3/envs/franka/lib/python3.12/site-packages/torch/nn/modules/transformer.py:379: UserWarning: enable_nested_tensor is True, but self.use_nested_tensor is False because encoder_layer.self_attn.batch_first was not True(use batch_first for better inference performance)
+  warnings.warn(
+2025-07-03 09:17:28 - moe_kgc - INFO - 模型参数量: 245,153,326
+/home2/yanghaochen/MoE_franka/training/trainer.py:30: FutureWarning: `torch.cuda.amp.GradScaler(args...)` is deprecated. Please use `torch.amp.GradScaler('cuda', args...)` instead.
+  self.scaler = GradScaler(enabled=self.use_amp)
+weight_decay: 1e-5 <class 'str'>
+2025-07-03 09:17:28 - moe_kgc - INFO - 开始训练...
+Epoch 0:   0%|          | 0/7827 [00:00<?, ?it/s]/home2/yanghaochen/MoE_franka/training/trainer.py:94: FutureWarning: `torch.cuda.amp.autocast(args...)` is deprecated. Please use `torch.amp.autocast('cuda', args...)` instead.
+  with torch.cuda.amp.autocast(enabled = getattr(self.config.training,'mixed_precision', False)):
+Epoch 0:   0%|          | 0/7827 [00:00<?, ?it/s]
+input_ids shape: torch.Size([194, 512])
+attention_mask shape: torch.Size([194, 512])
 Traceback (most recent call last):
-  File "/home2/yanghaochen/MoE_franka/scripts/train_e2e.py", line 313, in <module>
+  File "/home2/yanghaochen/MoE_franka/scripts/train_e2e.py", line 321, in <module>
     main()
-  File "/home2/yanghaochen/MoE_franka/scripts/train_e2e.py", line 147, in main
-    train_loader = train_loader_manager.get_link_prediction_loader()
-                   ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
-  File "/home2/yanghaochen/MoE_franka/data/batch_dataloader.py", line 79, in get_link_prediction_loader
-    loader = NeighborLoader(
-             ^^^^^^^^^^^^^^^
-  File "/home2/yanghaochen/anaconda3/envs/franka/lib/python3.12/site-packages/torch_geometric/loader/neighbor_loader.py", line 210, in __init__
-    super().__init__(
-  File "/home2/yanghaochen/anaconda3/envs/franka/lib/python3.12/site-packages/torch_geometric/loader/node_loader.py", line 111, in __init__
-    super().__init__(iterator, collate_fn=self.collate_fn, **kwargs)
-TypeError: DataLoader.__init__() got an unexpected keyword argument 'edge_label_index'
+  File "/home2/yanghaochen/MoE_franka/scripts/train_e2e.py", line 259, in main
+    history = trainer.train(
+              ^^^^^^^^^^^^^^
+  File "/home2/yanghaochen/MoE_franka/training/trainer.py", line 208, in train
+    train_results = self.train_epoch(train_loader, task=task)
+                    ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home2/yanghaochen/MoE_franka/training/trainer.py", line 96, in train_epoch
+    outputs = self.model(batch, task=task)
+              ^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home2/yanghaochen/anaconda3/envs/franka/lib/python3.12/site-packages/torch/nn/modules/module.py", line 1736, in _wrapped_call_impl
+    return self._call_impl(*args, **kwargs)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home2/yanghaochen/anaconda3/envs/franka/lib/python3.12/site-packages/torch/nn/modules/module.py", line 1747, in _call_impl
+    return forward_call(*args, **kwargs)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home2/yanghaochen/MoE_franka/models/moe_kgc.py", line 294, in forward
+    encoded = self.encode_multimodal_input(batch_dict)
+              ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home2/yanghaochen/MoE_franka/models/moe_kgc.py", line 178, in encode_multimodal_input
+    text_encoded = self.text_encoder(text_input_ids, text_attention_mask)
+                   ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home2/yanghaochen/anaconda3/envs/franka/lib/python3.12/site-packages/torch/nn/modules/module.py", line 1736, in _wrapped_call_impl
+    return self._call_impl(*args, **kwargs)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home2/yanghaochen/anaconda3/envs/franka/lib/python3.12/site-packages/torch/nn/modules/module.py", line 1747, in _call_impl
+    return forward_call(*args, **kwargs)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home2/yanghaochen/MoE_franka/models/encoders/text_encoder.py", line 54, in forward
+    outputs = self.bert(
+              ^^^^^^^^^^
+  File "/home2/yanghaochen/anaconda3/envs/franka/lib/python3.12/site-packages/torch/nn/modules/module.py", line 1736, in _wrapped_call_impl
+    return self._call_impl(*args, **kwargs)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home2/yanghaochen/anaconda3/envs/franka/lib/python3.12/site-packages/torch/nn/modules/module.py", line 1747, in _call_impl
+    return forward_call(*args, **kwargs)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home2/yanghaochen/anaconda3/envs/franka/lib/python3.12/site-packages/transformers/models/bert/modeling_bert.py", line 1016, in forward
+    encoder_outputs = self.encoder(
+                      ^^^^^^^^^^^^^
+  File "/home2/yanghaochen/anaconda3/envs/franka/lib/python3.12/site-packages/torch/nn/modules/module.py", line 1736, in _wrapped_call_impl
+    return self._call_impl(*args, **kwargs)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home2/yanghaochen/anaconda3/envs/franka/lib/python3.12/site-packages/torch/nn/modules/module.py", line 1747, in _call_impl
+    return forward_call(*args, **kwargs)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home2/yanghaochen/anaconda3/envs/franka/lib/python3.12/site-packages/transformers/models/bert/modeling_bert.py", line 662, in forward
+    layer_outputs = layer_module(
+                    ^^^^^^^^^^^^^
+  File "/home2/yanghaochen/anaconda3/envs/franka/lib/python3.12/site-packages/torch/nn/modules/module.py", line 1736, in _wrapped_call_impl
+    return self._call_impl(*args, **kwargs)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home2/yanghaochen/anaconda3/envs/franka/lib/python3.12/site-packages/torch/nn/modules/module.py", line 1747, in _call_impl
+    return forward_call(*args, **kwargs)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home2/yanghaochen/anaconda3/envs/franka/lib/python3.12/site-packages/transformers/models/bert/modeling_bert.py", line 594, in forward
+    layer_output = apply_chunking_to_forward(
+                   ^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home2/yanghaochen/anaconda3/envs/franka/lib/python3.12/site-packages/transformers/pytorch_utils.py", line 253, in apply_chunking_to_forward
+    return forward_fn(*input_tensors)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home2/yanghaochen/anaconda3/envs/franka/lib/python3.12/site-packages/transformers/models/bert/modeling_bert.py", line 606, in feed_forward_chunk
+    intermediate_output = self.intermediate(attention_output)
+                          ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home2/yanghaochen/anaconda3/envs/franka/lib/python3.12/site-packages/torch/nn/modules/module.py", line 1736, in _wrapped_call_impl
+    return self._call_impl(*args, **kwargs)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home2/yanghaochen/anaconda3/envs/franka/lib/python3.12/site-packages/torch/nn/modules/module.py", line 1747, in _call_impl
+    return forward_call(*args, **kwargs)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home2/yanghaochen/anaconda3/envs/franka/lib/python3.12/site-packages/transformers/models/bert/modeling_bert.py", line 507, in forward
+    hidden_states = self.intermediate_act_fn(hidden_states)
+                    ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home2/yanghaochen/anaconda3/envs/franka/lib/python3.12/site-packages/torch/nn/modules/module.py", line 1736, in _wrapped_call_impl
+    return self._call_impl(*args, **kwargs)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home2/yanghaochen/anaconda3/envs/franka/lib/python3.12/site-packages/torch/nn/modules/module.py", line 1747, in _call_impl
+    return forward_call(*args, **kwargs)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home2/yanghaochen/anaconda3/envs/franka/lib/python3.12/site-packages/transformers/activations.py", line 69, in forward
+    return self.act(input)
+           ^^^^^^^^^^^^^^^
+torch.OutOfMemoryError: CUDA out of memory. Tried to allocate 582.00 MiB. GPU 0 has a total capacity of 44.34 GiB of which 212.19 MiB is free. Process 1119175 has 2.82 GiB memory in use. Process 1261916 has 2.79 GiB memory in use. Including non-PyTorch memory, this process has 38.51 GiB memory in use. Of the allocated memory 38.17 GiB is allocated by PyTorch, and 26.34 MiB is reserved by PyTorch but unallocated. If reserved but unallocated memory is large try setting PYTORCH_CUDA_ALLOC_CONF=expandable_segments:True to avoid fragmentation.  See documentation for Memory Management  (https://pytorch.org/docs/stable/notes/cuda.html#environment-variables)
