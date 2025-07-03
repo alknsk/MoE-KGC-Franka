@@ -1,0 +1,28 @@
+2025-07-03 04:59:18 - moe_kgc - INFO - Logging to experiments/moe_kgc_batch_experiment_eval/logs/moe_kgc_20250703_045918.log
+2025-07-03 04:59:18 - moe_kgc - INFO - 开始实验: moe_kgc_batch_experiment_eval
+2025-07-03 04:59:18 - moe_kgc - INFO - 使用设备: cuda
+2025-07-03 04:59:18 - moe_kgc - INFO - 加载数据...
+2025-07-03 04:59:18 - moe_kgc - INFO - 加载预处理的PyG数据...
+/home2/yanghaochen/MoE_franka/scripts/train_e2e.py:101: FutureWarning: You are using `torch.load` with `weights_only=False` (the current default value), which uses the default pickle module implicitly. It is possible to construct malicious pickle data which will execute arbitrary code during unpickling (See https://github.com/pytorch/pytorch/blob/main/SECURITY.md#untrusted-models for more details). In a future release, the default value for `weights_only` will be flipped to `True`. This limits the functions that could be executed during unpickling. Arbitrary objects will no longer be allowed to be loaded via this mode unless they are explicitly allowlisted by the user via `torch.serialization.add_safe_globals`. We recommend you start setting `weights_only=True` for any use case where you don't have full control of the loaded file. Please open an issue on GitHub for any issues related to this experimental feature.
+  train_data = torch.load(train_pyg_path)
+/home2/yanghaochen/MoE_franka/scripts/train_e2e.py:102: FutureWarning: You are using `torch.load` with `weights_only=False` (the current default value), which uses the default pickle module implicitly. It is possible to construct malicious pickle data which will execute arbitrary code during unpickling (See https://github.com/pytorch/pytorch/blob/main/SECURITY.md#untrusted-models for more details). In a future release, the default value for `weights_only` will be flipped to `True`. This limits the functions that could be executed during unpickling. Arbitrary objects will no longer be allowed to be loaded via this mode unless they are explicitly allowlisted by the user via `torch.serialization.add_safe_globals`. We recommend you start setting `weights_only=True` for any use case where you don't have full control of the loaded file. Please open an issue on GitHub for any issues related to this experimental feature.
+  val_data = torch.load(val_pyg_path) if val_pyg_path.exists() else None
+/home2/yanghaochen/MoE_franka/scripts/train_e2e.py:103: FutureWarning: You are using `torch.load` with `weights_only=False` (the current default value), which uses the default pickle module implicitly. It is possible to construct malicious pickle data which will execute arbitrary code during unpickling (See https://github.com/pytorch/pytorch/blob/main/SECURITY.md#untrusted-models for more details). In a future release, the default value for `weights_only` will be flipped to `True`. This limits the functions that could be executed during unpickling. Arbitrary objects will no longer be allowed to be loaded via this mode unless they are explicitly allowlisted by the user via `torch.serialization.add_safe_globals`. We recommend you start setting `weights_only=True` for any use case where you don't have full control of the loaded file. Please open an issue on GitHub for any issues related to this experimental feature.
+  test_data = torch.load(test_pyg_path) if test_pyg_path.exists() else None
+2025-07-03 04:59:18 - moe_kgc - INFO - 创建mini-batch数据加载器...
+/home2/yanghaochen/anaconda3/envs/franka/lib/python3.12/site-packages/torch_geometric/sampler/neighbor_sampler.py:50: UserWarning: Using '{self.__class__.__name__}' without a 'pyg-lib' installation is deprecated and will be removed soon. Please install 'pyg-lib' for accelerated neighborhood sampling
+  warnings.warn("Using '{self.__class__.__name__}' without a "
+Traceback (most recent call last):
+  File "/home2/yanghaochen/MoE_franka/scripts/train_e2e.py", line 313, in <module>
+    main()
+  File "/home2/yanghaochen/MoE_franka/scripts/train_e2e.py", line 147, in main
+    train_loader = train_loader_manager.get_link_prediction_loader()
+                   ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home2/yanghaochen/MoE_franka/data/batch_dataloader.py", line 79, in get_link_prediction_loader
+    loader = NeighborLoader(
+             ^^^^^^^^^^^^^^^
+  File "/home2/yanghaochen/anaconda3/envs/franka/lib/python3.12/site-packages/torch_geometric/loader/neighbor_loader.py", line 210, in __init__
+    super().__init__(
+  File "/home2/yanghaochen/anaconda3/envs/franka/lib/python3.12/site-packages/torch_geometric/loader/node_loader.py", line 111, in __init__
+    super().__init__(iterator, collate_fn=self.collate_fn, **kwargs)
+TypeError: DataLoader.__init__() got an unexpected keyword argument 'edge_label_index'

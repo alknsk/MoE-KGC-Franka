@@ -38,6 +38,10 @@ class TrainingConfig:
     gradient_clip: float = 1.0    # 梯度裁剪阈值，防止梯度爆炸
     warmup_steps: int = 1000      # 学习率预热步数
     scheduler: str = "cosine"     # 学习率调度器类型
+    accumulation_steps: int = 1   # 新增这一行
+    mixed_precision: bool = False
+    empty_cache_freq: int = 10
+    gating_loss_weight: float = 0.01
 
 @dataclass
 class DataConfig:

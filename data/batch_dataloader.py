@@ -77,7 +77,7 @@ class MoEKGCBatchDataLoader:
         
         # 使用NeighborLoader进行子图采样
         loader = NeighborLoader(
-            self.pyg_data,
+            data=self.pyg_data,
             num_neighbors=self.num_neighbors,
             batch_size=self.batch_size,
             edge_label_index=self.pyg_data.edge_label_index,

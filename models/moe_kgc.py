@@ -1,7 +1,7 @@
 import torch
 import torch.nn as nn
 from typing import Dict, List, Optional, Any, Tuple, Union
-
+from torch_geometric.data import Data
 from .encoders import TextEncoder, TabularEncoder, StructuredEncoder
 from .experts import (ActionExpert, SpatialExpert, TemporalExpert,
                      SemanticExpert, SafetyExpert)
