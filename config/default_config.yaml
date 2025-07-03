@@ -8,6 +8,22 @@ model:
   dropout_rate: 0.1 # 丢弃率
   activation: "gelu"  # 激活函数
 
+# mini-batch数据加载配置
+dataloader:
+  batch_size: 32
+  num_neighbors: [25, 10]  # 每层采样的邻居数
+  sampling_method: "neighbor"  # neighbor, cluster, graphsaint
+  num_workers: 4
+  pin_memory: true
+  persistent_workers: true
+  
+  # 负采样配置
+  negative_sampling:
+    ratio: 1.0
+    method: "uniform"
+
+
+
 # 专家配置
 experts:
   action_expert:
@@ -50,6 +66,14 @@ training:
   gradient_clip: 1.0 # 梯度裁剪
   warmup_steps: 1000 # 热身步数
   scheduler: "cosine" # 学习率调度器
+
+  # Mini-batch特定配置
+  accumulation_steps: 1  # 梯度累积
+  mixed_precision: false  # 混合精度训练
+  empty_cache_freq: 10  # 清理GPU缓存频率
+  
+  # 正则化
+  gating_loss_weight: 0.01
 
 # 数据配置
 data:
@@ -101,3 +125,8 @@ visualization:
   width: "100%"
   height: "1200px"
   notebook_mode: true
+
+# 内存优化
+memory_optimization:
+  max_nodes_per_batch: 5000  # 每个批次的最大节点数
+  gradient_checkpointing: false

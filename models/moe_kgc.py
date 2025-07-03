@@ -1,6 +1,6 @@
 import torch
 import torch.nn as nn
-from typing import Dict, List, Optional, Any, Tuple
+from typing import Dict, List, Optional, Any, Tuple, Union
 
 from .encoders import TextEncoder, TabularEncoder, StructuredEncoder
 from .experts import (ActionExpert, SpatialExpert, TemporalExpert,
@@ -259,106 +259,206 @@ class MoEKGC(nn.Module):
 
         return expert_outputs
 
-    def forward(self, batch: Dict[str, Any], task: str = 'link_prediction') -> Dict[str, torch.Tensor]:
+    def forward(self, batch: Union[Dict[str, Any], Data], task: str = 'link_prediction') -> Dict[str, torch.Tensor]:
         """
-        Forward pass of MoE-KGC model
-
+        支持批处理的前向传播
+        
         Args:
-            batch: Batch of multimodal data
-            task: Target task ('link_prediction', 'entity_classification', 'relation_extraction')
-
-        Returns:
-            Task-specific outputs
+            batch: PyG Batch对象或包含批处理数据的字典
+            task: 任务类型
         """
-        
-        print("Batch keys:", batch.keys())
-        
-        # Encode multimodal inputs
-        encoded = self.encode_multimodal_input(batch)
-
-        # Combine encoded features
-        combined_features = []
-        for modality in ['text', 'tabular', 'structured']:
-            if modality in encoded:
-                print(f"{modality} to be concatenated shape:", encoded[modality].shape) # Debugging line
-                combined_features.append(encoded[modality])
-
-        if combined_features:
-            combined_features_cat = torch.cat(combined_features, dim=-1)
+        # 统一处理PyG Batch对象
+        if isinstance(batch, Data) or hasattr(batch, 'edge_index'):
+            batch_dict = self._convert_pyg_batch_to_dict(batch, task)
         else:
-            raise ValueError("No input modalities found in batch")
-
-        # Apply gating mechanism
-        gating_output = self.gating(combined_features_cat)
+            batch_dict = batch
+        
+        # 检查必要的键
+        required_keys = ['node_features', 'text_inputs', 'tabular_inputs', 'structured_inputs']
+        for key in required_keys:
+            if key not in batch_dict:
+                self.logger.warning(f"Missing key in batch: {key}")
+        
+        # 编码多模态输入
+        encoded = self.encode_multimodal_input(batch_dict)
+        
+        # 合并编码特征
+        combined_features = self._combine_encoded_features(encoded)
+        
+        # 应用门控机制
+        gating_output = self.gating(combined_features)
         expert_indices = gating_output['indices']
         expert_gates = gating_output['gates']
-
-        expert_inputs = {
-            'action': encoded['tabular'],      # tabular编码 [batch,512]
-            'spatial': encoded['structured'],  # structured编码 [batch,512]
-            'temporal': encoded['text'],       # text编码 [batch,512]
-            'semantic': encoded['text'],       # text编码 [batch,512]
-            'safety': encoded['structured']    # structured编码 [batch,512]
-        }
         
-        print("combined_features shape:", combined_features.shape)  # 应为 [batch, config.expert_hidden_dim * 3]
-        print("expert_inputs['action'] shape:", expert_inputs['action'].shape)  # 应为 [batch, config.expert_hidden_dim]
+        # 准备专家输入
+        expert_inputs = self._prepare_expert_inputs(encoded)
         
-        # Apply selected experts
-        expert_outputs = self.apply_experts(
-            expert_inputs, expert_indices, expert_gates, batch
+        # 应用专家（批处理版本）
+        expert_outputs = self.apply_experts_batch(
+            expert_inputs, expert_indices, expert_gates, batch_dict
         )
-
-        # Apply GNN if graph structure is available
-        if 'edge_index' in batch:
-            print("expert_outputs shape:", expert_outputs.shape)
-            print("edge_index shape:", batch['edge_index'].shape)
-            print("edge_index max:", batch['edge_index'].max().item())
-            print("edge_index min:", batch['edge_index'].min().item())
-            print("expert_outputs.size(0):", expert_outputs.size(0))
-            # 这是用来dubug的，用完记得删除
-            
-            assert batch['edge_index'].max().item() < expert_outputs.size(0), \
-                f"edge_index越界: max={batch['edge_index'].max().item()}, 节点数={expert_outputs.size(0)}"
-            
-            gnn_output = self.gnn(
-                expert_outputs,
-                batch['edge_index'],
-                batch.get('edge_attr', None),
-                batch.get('batch_idx', None)
-            )
+        
+        # 应用GNN（支持批处理）
+        if 'edge_index' in batch_dict:
+            gnn_output = self._apply_gnn_batch(expert_outputs, batch_dict)
             node_embeddings = gnn_output['node_embeddings']
             graph_embedding = gnn_output['graph_embedding']
         else:
             node_embeddings = expert_outputs
             graph_embedding = expert_outputs.mean(dim=0, keepdim=True)
-
-        # Task-specific heads
-        if task == 'link_prediction':
-            output = self.link_prediction_head(
-                node_embeddings[batch['head']],
-                node_embeddings[batch['tail']],
-                batch['label']
-            )
-        elif task == 'entity_classification':
-            output = self.entity_classification_head(
-                node_embeddings[batch['node_idx']],
-                batch['label']
-            )
-        elif task == 'relation_extraction':
-            output = self.relation_extraction_head(
-                node_embeddings[batch['head_idx']],
-                node_embeddings[batch['tail_idx']],
-                batch['relation_type']
-            )
-        else:
-            raise ValueError(f"Unknown task: {task}")
-
-        # Add auxiliary outputs
+        
+        # 任务特定的输出头
+        output = self._apply_task_head(node_embeddings, batch_dict, task)
+        
+        # 添加辅助输出
         output['gating_loss'] = gating_output['load_balancing_loss']
         output['expert_utilization'] = gating_output.get('all_scores', None)
-
+        
         return output
+
+    def _convert_pyg_batch_to_dict(self, batch: Data, task: str) -> Dict[str, Any]:
+        """将PyG Batch对象转换为字典格式"""
+        batch_dict = {
+            'node_features': batch.x if hasattr(batch, 'x') else batch.node_features,
+            'edge_index': batch.edge_index,
+            'batch_idx': batch.batch if hasattr(batch, 'batch') else torch.zeros(batch.num_nodes, dtype=torch.long)
+        }
+        
+        # 多模态输入
+        for key in ['text_inputs', 'tabular_inputs', 'structured_inputs']:
+            if hasattr(batch, key):
+                batch_dict[key] = getattr(batch, key)
+        
+        # 任务特定数据
+        if task == 'link_prediction':
+            if hasattr(batch, 'head') and hasattr(batch, 'tail'):
+                batch_dict['head'] = batch.head
+                batch_dict['tail'] = batch.tail
+                batch_dict['label'] = batch.label if hasattr(batch, 'label') else torch.ones(len(batch.head))
+            elif hasattr(batch, 'edge_label_index'):
+                # 从edge_label_index提取
+                pos_mask = batch.edge_label == 1 if hasattr(batch, 'edge_label') else torch.ones(batch.edge_label_index.size(1), dtype=torch.bool)
+                batch_dict['head'] = batch.edge_label_index[0, pos_mask]
+                batch_dict['tail'] = batch.edge_label_index[1, pos_mask]
+                batch_dict['label'] = torch.ones(pos_mask.sum())
+        
+        elif task == 'entity_classification':
+            if hasattr(batch, 'node_idx'):
+                batch_dict['node_idx'] = batch.node_idx
+            else:
+                batch_dict['node_idx'] = torch.arange(batch.num_nodes)
+            
+            if hasattr(batch, 'y'):
+                batch_dict['label'] = batch.y
+            elif hasattr(batch, 'label'):
+                batch_dict['label'] = batch.label
+        
+        return batch_dict
+
+    def apply_experts_batch(self, expert_inputs: Dict[str, torch.Tensor],
+                       expert_indices: torch.Tensor,
+                       expert_gates: torch.Tensor,
+                       batch: Dict[str, Any]) -> torch.Tensor:
+        """批处理版本的专家应用"""
+        batch_size = expert_indices.size(0)
+        output_dim = self.config.hidden_dim
+        device = expert_gates.device
+        
+        # 初始化输出
+        expert_outputs = torch.zeros(batch_size, output_dim, device=device)
+        
+        # 批处理专家应用
+        for expert_idx in range(self.config.num_experts):
+            expert_name = list(self.experts.keys())[expert_idx]
+            expert = self.experts[expert_name]
+            
+            # 找出选择了这个专家的样本
+            mask = (expert_indices == expert_idx).any(dim=1)
+            if not mask.any():
+                continue
+            
+            # 获取对应的输入
+            expert_input = expert_inputs[expert_name][mask]
+            
+            # 准备专家特定的参数
+            expert_kwargs = {}
+            if expert_name == 'action' and 'joint_positions' in batch:
+                expert_kwargs['joint_positions'] = batch['joint_positions'][mask]
+            elif expert_name == 'spatial' and 'positions' in batch:
+                expert_kwargs['positions'] = batch['positions'][mask]
+            elif expert_name == 'temporal' and 'timestamps' in batch:
+                expert_kwargs['timestamps'] = batch['timestamps'][mask]
+            
+            # 应用专家
+            with torch.cuda.amp.autocast(enabled=False):  # 避免混合精度问题
+                expert_output = expert(expert_input, **expert_kwargs)
+            
+            # 获取对应的门控权重
+            expert_gate_weights = expert_gates[mask]
+            gate_idx = (expert_indices[mask] == expert_idx).float()
+            weights = (expert_gate_weights * gate_idx).sum(dim=1, keepdim=True)
+            
+            # 加权输出
+            expert_outputs[mask] += weights * expert_output
+        
+        return expert_outputs
+
+    def _apply_gnn_batch(self, node_features: torch.Tensor, batch_dict: Dict[str, Any]) -> Dict[str, torch.Tensor]:
+        """批处理GNN应用"""
+        edge_index = batch_dict['edge_index']
+        batch_idx = batch_dict.get('batch_idx', torch.zeros(node_features.size(0), dtype=torch.long, device=node_features.device))
+        
+        # 验证边索引
+        num_nodes = node_features.size(0)
+        if edge_index.size(0) > 0:
+            assert edge_index.max() < num_nodes, f"Edge index out of bounds: max {edge_index.max()} >= {num_nodes}"
+            assert edge_index.min() >= 0, f"Edge index negative: min {edge_index.min()}"
+        
+        # 应用GNN
+        gnn_output = self.gnn(
+            node_features,
+            edge_index,
+            batch_dict.get('edge_attr', None),
+            batch_idx
+        )
+        
+        return gnn_output
+
+    def _combine_encoded_features(self, encoded: Dict[str, torch.Tensor]) -> torch.Tensor:
+        """合并编码特征"""
+        features = []
+        for modality in ['text', 'tabular', 'structured']:
+            if modality in encoded and encoded[modality] is not None:
+                features.append(encoded[modality])
+        
+        if not features:
+            raise ValueError("No encoded features found")
+        
+        # 确保所有特征有相同的batch大小
+        batch_size = features[0].size(0)
+        for f in features:
+            assert f.size(0) == batch_size, f"Inconsistent batch size: {f.size(0)} vs {batch_size}"
+        
+        return torch.cat(features, dim=-1)
+
+    def _prepare_expert_inputs(self, encoded: Dict[str, torch.Tensor]) -> Dict[str, torch.Tensor]:
+        """准备专家输入，确保每个专家都有输入"""
+        # 默认映射
+        expert_inputs = {
+            'action': encoded.get('tabular', encoded.get('text')),
+            'spatial': encoded.get('structured', encoded.get('tabular')),
+            'temporal': encoded.get('text', encoded.get('structured')),
+            'semantic': encoded.get('text', encoded.get('tabular')),
+            'safety': encoded.get('structured', encoded.get('tabular'))
+        }
+        
+        # 确保没有None值
+        default_input = list(encoded.values())[0]
+        for key in expert_inputs:
+            if expert_inputs[key] is None:
+                expert_inputs[key] = default_input
+        
+        return expert_inputs
 
     def get_expert_weights(self) -> Dict[str, torch.Tensor]:
         """Get current expert importance weights"""

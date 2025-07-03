@@ -72,7 +72,7 @@ class TemporalExpert(BaseExpert):
         pe[:, 1::2] = torch.cos(position * div_term)
         
         return pe.unsqueeze(0)
-    
+
     def compute_expert_features(self, x: torch.Tensor, **kwargs) -> torch.Tensor:
         """Compute temporal features"""
         batch_size = x.size(0)
@@ -105,14 +105,21 @@ class TemporalExpert(BaseExpert):
             transformer_out = self.transformer(lstm_out)
             transformer_out = transformer_out.transpose(0, 1)  # [batch, seq_len, features]
             
-            pooled = transformer_out.mean(dim=1)  # [batch, 1024]
-            projected = self.temporal_feature_projection(pooled)
-            return projected
+            pooled = transformer_out.mean(dim=1)  # [batch, features]
         else:
             x_expanded = x.unsqueeze(1)
             lstm_out, _ = self.lstm(x_expanded)
-            projected = self.temporal_feature_projection(lstm_out.squeeze(1))
-            return projected
+            pooled = lstm_out.squeeze(1)
+        
+        # 动态创建投影层
+        actual_dim = pooled.shape[-1]
+        if not hasattr(self, 'dynamic_projection') or self.dynamic_projection.in_features != actual_dim:
+            self.dynamic_projection = nn.Linear(actual_dim, self.input_dim).to(pooled.device)
+            nn.init.xavier_uniform_(self.dynamic_projection.weight)
+            nn.init.zeros_(self.dynamic_projection.bias)
+        
+        projected = self.dynamic_projection(pooled)
+        return projected
     
     def predict_temporal_relation(self, seq1: torch.Tensor, seq2: torch.Tensor) -> Dict[str, torch.Tensor]:
         """Predict temporal relation between two sequences"""

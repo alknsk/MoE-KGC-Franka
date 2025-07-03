@@ -62,7 +62,7 @@ class SemanticExpert(BaseExpert):
         )
         
         self.semantic_feature_projection = nn.Linear((hidden_dims[0] // 2) * 2, input_dim)
-    
+
     def compute_expert_features(self, x: torch.Tensor, **kwargs) -> torch.Tensor:
         """Compute semantic features"""
         features = []
@@ -97,13 +97,14 @@ class SemanticExpert(BaseExpert):
         else:
             combined = torch.cat(features, dim=-1) if len(features) > 1 else features[0]
         
-        # 补零或截断
-        if combined.shape[-1] < self.semantic_feature_projection.in_features:
-            pad = torch.zeros(combined.shape[0], self.semantic_feature_projection.in_features - combined.shape[-1], device=combined.device, dtype=combined.dtype)
-            combined = torch.cat([combined, pad], dim=-1)
-        elif combined.shape[-1] > self.semantic_feature_projection.in_features:
-            combined = combined[..., :self.semantic_feature_projection.in_features]
-        projected = self.semantic_feature_projection(combined)
+        # 动态创建投影层
+        actual_dim = combined.shape[-1]
+        if not hasattr(self, 'dynamic_projection') or self.dynamic_projection.in_features != actual_dim:
+            self.dynamic_projection = nn.Linear(actual_dim, self.input_dim).to(combined.device)
+            nn.init.xavier_uniform_(self.dynamic_projection.weight)
+            nn.init.zeros_(self.dynamic_projection.bias)
+        
+        projected = self.dynamic_projection(combined)
         return projected
     
     def classify_semantic_category(self, x: torch.Tensor, **kwargs) -> Dict[str, torch.Tensor]:

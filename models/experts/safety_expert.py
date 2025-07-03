@@ -74,7 +74,7 @@ class SafetyExpert(BaseExpert):
         self.feature_proj = None  # 动态创建投影层
     
         self.safety_feature_projection = nn.Linear((hidden_dims[0] // 3) * 3, input_dim)
-        
+
     def compute_expert_features(self, x: torch.Tensor, **kwargs) -> torch.Tensor:
         """Compute safety-related features"""
         features = []
@@ -94,7 +94,6 @@ class SafetyExpert(BaseExpert):
         # Process workspace boundaries
         if 'workspace_violations' in kwargs:
             violations = kwargs['workspace_violations']
-            # Encode violations as features
             violation_features = torch.zeros_like(features[0]) if features else torch.zeros(
                 x.size(0), self.hidden_dims[0] // 3, device=x.device
             )
@@ -105,16 +104,16 @@ class SafetyExpert(BaseExpert):
         if not features:
             return x
         
-        # Combine all safety features
         combined = torch.cat(features, dim=-1)
         
-        # 补零或截断
-        if combined.shape[-1] < self.safety_feature_projection.in_features:
-            pad = torch.zeros(combined.shape[0], self.safety_feature_projection.in_features - combined.shape[-1], device=combined.device, dtype=combined.dtype)
-            combined = torch.cat([combined, pad], dim=-1)
-        elif combined.shape[-1] > self.safety_feature_projection.in_features:
-            combined = combined[..., :self.safety_feature_projection.in_features]
-        projected = self.safety_feature_projection(combined)
+        # 动态创建投影层
+        actual_dim = combined.shape[-1]
+        if not hasattr(self, 'dynamic_projection') or self.dynamic_projection.in_features != actual_dim:
+            self.dynamic_projection = nn.Linear(actual_dim, self.input_dim).to(combined.device)
+            nn.init.xavier_uniform_(self.dynamic_projection.weight)
+            nn.init.zeros_(self.dynamic_projection.bias)
+        
+        projected = self.dynamic_projection(combined)
         return projected
     
     def assess_collision_risk(self, state: torch.Tensor, **kwargs) -> Dict[str, torch.Tensor]:

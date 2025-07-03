@@ -52,49 +52,51 @@ class ActionExpert(BaseExpert):
         # 最多拼接3个分量（这里乘3了）
         self.action_feature_projection = nn.Linear((hidden_dims[0] // 2) * 3, input_dim)
         
-    def compute_expert_features(self, x: torch.Tensor, **kwargs) -> torch.Tensor:
-        """
-        Compute action-specific features
-        
-        Args:
-            x: Input features
-            kwargs: May contain 'joint_positions', 'joint_velocities', 'action_ids'
-        """
-        features = []
-        
-        # Process joint positions if available
-        if 'joint_positions' in kwargs:
-            joint_pos = kwargs['joint_positions']
-            joint_features = self.joint_encoder(joint_pos)
-            features.append(joint_features)
-        
-        # Process joint velocities if available
-        if 'joint_velocities' in kwargs:
-            joint_vel = kwargs['joint_velocities']
-            velocity_features = self.velocity_encoder(joint_vel)
-            features.append(velocity_features)
-        
-        # Process action IDs if available
-        if 'action_ids' in kwargs:
-            action_ids = kwargs['action_ids']
-            action_features = self.action_embedding(action_ids)
-            features.append(action_features)
-        
-        # If no specific features, use input directly
-        if not features:
-            return x
-        
-        # Concatenate all features
-        combined_features = torch.cat(features, dim=-1)
-        
-        # 补零或截断
-        if combined.shape[-1] < self.action_feature_projection.in_features:
-            pad = torch.zeros(combined.shape[0], self.action_feature_projection.in_features - combined.shape[-1], device=combined.device, dtype=combined.dtype)
-            combined = torch.cat([combined, pad], dim=-1)
-        elif combined.shape[-1] > self.action_feature_projection.in_features:
-            combined = combined[..., :self.action_feature_projection.in_features]
-        projected = self.action_feature_projection(combined)
-        return projected
+def compute_expert_features(self, x: torch.Tensor, **kwargs) -> torch.Tensor:
+    """
+    Compute action-specific features
+    
+    Args:
+        x: Input features [batch_size, input_dim]
+        kwargs: May contain 'joint_positions', 'joint_velocities', 'action_ids'
+    """
+    features = []
+    
+    # Process joint positions if available
+    if 'joint_positions' in kwargs:
+        joint_pos = kwargs['joint_positions']
+        joint_features = self.joint_encoder(joint_pos)
+        features.append(joint_features)
+    
+    # Process joint velocities if available
+    if 'joint_velocities' in kwargs:
+        joint_vel = kwargs['joint_velocities']
+        velocity_features = self.velocity_encoder(joint_vel)
+        features.append(velocity_features)
+    
+    # Process action IDs if available
+    if 'action_ids' in kwargs:
+        action_ids = kwargs['action_ids']
+        action_features = self.action_embedding(action_ids)
+        features.append(action_features)
+    
+    # If no specific features, use input directly
+    if not features:
+        return x
+    
+    # Concatenate all features
+    combined = torch.cat(features, dim=-1)
+    
+    # 动态创建投影层（解决维度不匹配问题）
+    actual_dim = combined.shape[-1]
+    if not hasattr(self, 'dynamic_projection') or self.dynamic_projection.in_features != actual_dim:
+        self.dynamic_projection = nn.Linear(actual_dim, self.input_dim).to(combined.device)
+        # 初始化权重
+        nn.init.xavier_uniform_(self.dynamic_projection.weight)
+        nn.init.zeros_(self.dynamic_projection.bias)
+    
+    projected = self.dynamic_projection(combined)
+    return projected
     
     def predict_action(self, x: torch.Tensor, **kwargs) -> Dict[str, torch.Tensor]:
         """Predict next action"""

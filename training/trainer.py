@@ -78,53 +78,69 @@ class Trainer:
         progress_bar = tqdm(train_loader, desc=f'Epoch {self.epoch}')
         
         for batch_idx, batch in enumerate(progress_bar):
-            # Move batch to device
-            batch = self._move_batch_to_device(batch)
+            # 处理PyG batch
+            if hasattr(batch, 'to'):
+                batch = batch.to(self.device)
+            else:
+                batch = self._move_batch_to_device(batch)
             
-            # Forward pass
-            outputs = self.model(batch, task=task)
+            # 梯度累积
+            is_accumulation_step = (batch_idx + 1) % self.config.training.get('accumulation_steps', 1) != 0
             
-            # Compute loss
-            loss_dict = self.criterion(outputs, batch, task=task)
-            total_loss = loss_dict['total_loss']
+            # 混合精度训练
+            with torch.cuda.amp.autocast(enabled=self.config.training.get('mixed_precision', False)):
+                # 前向传播
+                outputs = self.model(batch, task=task)
+                
+                # 计算损失
+                loss_dict = self.criterion(outputs, batch, task=task)
+                total_loss = loss_dict['total_loss']
+                
+                # 添加门控损失
+                if 'gating_loss' in outputs:
+                    gating_weight = self.config.training.get('gating_loss_weight', 0.01)
+                    total_loss = total_loss + gating_weight * outputs['gating_loss']
             
-            # Backward pass
-            self.optimizer.zero_grad()
+            # 梯度累积归一化
+            if self.config.training.get('accumulation_steps', 1) > 1:
+                total_loss = total_loss / self.config.training.get('accumulation_steps', 1)
+            
+            # 反向传播
             total_loss.backward()
             
-            # Gradient clipping
-            if self.config.training.gradient_clip > 0:
-                torch.nn.utils.clip_grad_norm_(
-                    self.model.parameters(), 
-                    self.config.training.gradient_clip
-                )
+            if not is_accumulation_step:
+                # 梯度裁剪
+                if self.config.training.gradient_clip > 0:
+                    torch.nn.utils.clip_grad_norm_(
+                        self.model.parameters(), 
+                        self.config.training.gradient_clip
+                    )
+                
+                self.optimizer.step()
+                self.optimizer.zero_grad()
             
-            self.optimizer.step()
-            
-            # Update metrics
-            epoch_losses.append(total_loss.item())
+            # 更新指标
+            epoch_losses.append(total_loss.item() * self.config.training.get('accumulation_steps', 1))
             
             with torch.no_grad():
+                # 确保outputs和batch都在同一设备上
                 metrics = compute_metrics(outputs, batch, task=task)
                 epoch_metrics.append(metrics)
             
-            # Update progress bar
+            # 更新进度条
             progress_bar.set_postfix({
                 'loss': f"{total_loss.item():.4f}",
-                'acc': f"{metrics.get('accuracy', 0):.4f}"
+                'acc': f"{metrics.get('accuracy', 0):.4f}",
+                'nodes': batch.num_nodes if hasattr(batch, 'num_nodes') else 'N/A'
             })
             
-            # Log to wandb
-            if self.global_step % 100 == 0 and wandb.run is not None:
-                wandb.log({
-                    'train/loss': total_loss.item(),
-                    'train/lr': self.optimizer.param_groups[0]['lr'],
-                    **{f'train/{k}': v for k, v in metrics.items()}
-                }, step=self.global_step)
+            # 定期清理GPU内存
+            if batch_idx % self.config.training.get('empty_cache_freq', 10) == 0 and torch.cuda.is_available():
+                torch.cuda.empty_cache()
             
             self.global_step += 1
         
-        # Aggregate epoch metrics
+        # 聚合epoch指标
         avg_loss = np.mean(epoch_losses)
         avg_metrics = self._aggregate_metrics(epoch_metrics)
         

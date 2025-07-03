@@ -287,3 +287,161 @@ class FrankaKGDataset(Dataset):
         stats['entity_distribution'] = type_counts
         
         return stats
+    
+def to_pyg_data(self) -> Data:
+    """
+    将数据集转换为PyTorch Geometric Data对象
+    完整支持mini-batch训练
+    """
+    # 确保有节点映射
+    if not hasattr(self, 'entity_to_idx'):
+        self.entity_to_idx = {}
+        idx = 0
+        for entity_type, entity_list in self.entities.items():
+            for entity in entity_list:
+                entity_id = entity.get('id', str(entity))
+                self.entity_to_idx[entity_id] = idx
+                idx += 1
+    
+    # 构建边索引
+    edge_index = []
+    edge_attr = []
+    edge_type = []
+    
+    for relation in self.relations:
+        head_id = relation.get('head')
+        tail_id = relation.get('tail')
+        
+        if head_id in self.entity_to_idx and tail_id in self.entity_to_idx:
+            head_idx = self.entity_to_idx[head_id]
+            tail_idx = self.entity_to_idx[tail_id]
+            edge_index.append([head_idx, tail_idx])
+            
+            # 关系类型
+            rel_type = relation.get('type', 'unknown')
+            if not hasattr(self, 'relation_to_idx'):
+                self.relation_to_idx = {
+                    'follows': 0, 'interacts_with': 1, 'has_constraint': 2,
+                    'has_safety_limit': 3, 'co_occurrence': 4, 'unknown': 5
+                }
+            edge_type.append(self.relation_to_idx.get(rel_type, 5))
+            
+            # 边特征（如果有）
+            if 'attributes' in relation:
+                # 这里可以根据需要提取边特征
+                edge_feat = torch.zeros(self.config.graph.edge_hidden_dim)
+                edge_attr.append(edge_feat)
+    
+    edge_index = torch.tensor(edge_index, dtype=torch.long).t().contiguous()
+    edge_type = torch.tensor(edge_type, dtype=torch.long)
+    
+    if edge_attr:
+        edge_attr = torch.stack(edge_attr)
+    else:
+        edge_attr = None
+    
+    # 构建节点特征和多模态输入
+    num_nodes = len(self.entity_to_idx)
+    
+    # 节点基础特征
+    x = torch.zeros(num_nodes, self.config.expert_hidden_dim)
+    
+    # 准备多模态输入
+    text_inputs = {
+        'input_ids': torch.zeros(num_nodes, self.config.data.max_seq_length, dtype=torch.long),
+        'attention_mask': torch.zeros(num_nodes, self.config.data.max_seq_length, dtype=torch.long)
+    }
+    
+    tabular_inputs = {
+        'numerical': torch.zeros(num_nodes, 3),  # joint_positions, gripper_state, force_torque
+        'categorical': {
+            'action': torch.zeros(num_nodes, dtype=torch.long),
+            'object_id': torch.zeros(num_nodes, dtype=torch.long)
+        }
+    }
+    
+    structured_inputs = {
+        'task_features': torch.zeros(num_nodes, 256),
+        'constraint_features': torch.zeros(num_nodes, 256),
+        'safety_features': torch.zeros(num_nodes, 256)
+    }
+    
+    # 为每个节点创建标签（用于节点分类）
+    y = torch.zeros(num_nodes, dtype=torch.long)
+    type_mapping = {
+        'action': 0, 'object': 1, 'task': 2, 'constraint': 3,
+        'safety': 4, 'spatial': 5, 'temporal': 6, 'semantic': 7
+    }
+    
+    # 填充节点特征
+    for entity_id, idx in self.entity_to_idx.items():
+        # 查找实体
+        entity = None
+        for entity_type, entity_list in self.entities.items():
+            for e in entity_list:
+                if e.get('id') == entity_id:
+                    entity = e
+                    y[idx] = type_mapping.get(entity_type, 7)
+                    break
+            if entity:
+                break
+        
+        if entity:
+            # 这里可以根据实体属性填充特征
+            # 示例：使用随机特征
+            x[idx] = torch.randn(self.config.expert_hidden_dim) * 0.1
+            
+            # 填充文本输入（如果有）
+            if 'text' in entity or 'name' in entity:
+                # 这里应该使用真实的tokenizer
+                # 现在使用随机token作为示例
+                seq_len = min(20, self.config.data.max_seq_length)
+                text_inputs['input_ids'][idx, :seq_len] = torch.randint(1, 1000, (seq_len,))
+                text_inputs['attention_mask'][idx, :seq_len] = 1
+    
+    # 创建PyG Data对象
+    data = Data(
+        x=x,
+        edge_index=edge_index,
+        edge_attr=edge_attr,
+        edge_type=edge_type,
+        y=y,
+        num_nodes=num_nodes,
+        text_inputs=text_inputs,
+        tabular_inputs=tabular_inputs,
+        structured_inputs=structured_inputs
+    )
+    
+    # 添加数据分割
+    data = self._add_data_splits_pyg(data)
+    
+    return data
+
+def _add_data_splits_pyg(self, data: Data) -> Data:
+    """为PyG数据添加训练/验证/测试分割"""
+    num_edges = data.edge_index.size(1)
+    num_nodes = data.num_nodes
+    
+    # 边分割（链接预测）
+    edge_perm = torch.randperm(num_edges)
+    train_edge_size = int(0.7 * num_edges)
+    val_edge_size = int(0.15 * num_edges)
+    
+    data.train_edge_index = data.edge_index[:, edge_perm[:train_edge_size]]
+    data.val_edge_index = data.edge_index[:, edge_perm[train_edge_size:train_edge_size+val_edge_size]]
+    data.test_edge_index = data.edge_index[:, edge_perm[train_edge_size+val_edge_size:]]
+    
+    # 节点分割（节点分类）
+    node_perm = torch.randperm(num_nodes)
+    train_node_size = int(0.7 * num_nodes)
+    val_node_size = int(0.15 * num_nodes)
+    
+    data.train_mask = torch.zeros(num_nodes, dtype=torch.bool)
+    data.val_mask = torch.zeros(num_nodes, dtype=torch.bool)
+    data.test_mask = torch.zeros(num_nodes, dtype=torch.bool)
+    
+    data.train_mask[node_perm[:train_node_size]] = True
+    data.val_mask[node_perm[train_node_size:train_node_size+val_node_size]] = True
+    data.test_mask[node_perm[train_node_size+val_node_size:]] = True
+    
+    return data

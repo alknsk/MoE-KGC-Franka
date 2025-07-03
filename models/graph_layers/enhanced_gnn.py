@@ -177,6 +177,10 @@ class EnhancedGNN(nn.Module):
             edge_attr: Edge features [num_edges, edge_dim]
             batch: Batch assignment [num_nodes]
         """
+        if batch is not None:
+            assert batch.max().item() < x.shape[0], (
+                f"batch.max()={batch.max().item()} >= x.shape[0]={x.shape[0]}"
+            )
         print(f"[DEBUG] input x shape: {x.shape}")
         print(f"[DEBUG] edge_index shape: {edge_index.shape}, max: {edge_index.max().item()}, min: {edge_index.min().item()}")
         assert edge_index.max().item() < x.shape[0], (
@@ -202,7 +206,7 @@ class EnhancedGNN(nn.Module):
         layer_outputs = [x]
         
         # Apply GNN layers
-        for layer in self.gnn_layers:
+        for i, layer in self.gnn_layers:
             x = layer(x, edge_index, edge_attr)
             print(f"[DEBUG] after GNN layer {i}, x shape: {x.shape}, x.mean: {x.mean().item():.4f}")
             layer_outputs.append(x)

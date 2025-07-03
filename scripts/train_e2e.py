@@ -19,6 +19,7 @@ from evaluation import Evaluator, BaselineComparison
 from utils import setup_logger, set_seed, plot_training_history
 from torch_geometric.loader import DataLoader
 from pathlib import Path
+from data.batch_dataloader import MoEKGCBatchDataLoader
 
 def main():
     parser = argparse.ArgumentParser(description='MoE-KGC 端到端训练')
@@ -89,37 +90,112 @@ def main():
 
     # ========== 数据加载 ==========
     logger.info("加载数据...")
-    data_loader = KGDataLoader(config)
+    
+    # 检查是否有预处理的PyG数据
+    train_pyg_path = Path(args.data_dir) / 'train' / 'pyg_data.pt'
+    val_pyg_path = Path(args.data_dir) / 'val' / 'pyg_data.pt'
+    test_pyg_path = Path(args.data_dir) / 'test' / 'pyg_data.pt'
+    
+    if train_pyg_path.exists():
+        logger.info("加载预处理的PyG数据...")
+        train_data = torch.load(train_pyg_path)
+        val_data = torch.load(val_pyg_path) if val_pyg_path.exists() else None
+        test_data = torch.load(test_pyg_path) if test_pyg_path.exists() else None
+    else:
+        logger.info("创建PyG数据...")
+        data_loader = KGDataLoader(config)
+        
+        # 创建数据集并转换为PyG格式
+        train_dataset = data_loader.create_dataset(Path(args.data_dir) / 'train')
+        train_data = train_dataset.to_pyg_data()
+        torch.save(train_data, train_pyg_path)
+        
+        if (Path(args.data_dir) / 'val').exists():
+            val_dataset = data_loader.create_dataset(Path(args.data_dir) / 'val')
+            val_data = val_dataset.to_pyg_data()
+            torch.save(val_data, val_pyg_path)
+        else:
+            val_data = None
+        
+        if (Path(args.data_dir) / 'test').exists():
+            test_dataset = data_loader.create_dataset(Path(args.data_dir) / 'test')
+            test_data = test_dataset.to_pyg_data()
+            torch.save(test_data, test_pyg_path)
+        else:
+            test_data = None
 
-    # 创建数据集
-    train_dataset = data_loader.create_dataset(Path(args.data_dir) / 'train')
-    val_dataset = data_loader.create_dataset(Path(args.data_dir) / 'val')
-    test_dataset = data_loader.create_dataset(Path(args.data_dir) / 'test')
+    # 创建批处理数据加载器
+    logger.info("创建mini-batch数据加载器...")
 
-    # 创建数据加载器
-    train_loader = DataLoader(
-        train_dataset,
+    # 添加批处理相关参数
+    num_neighbors = [25, 10] if not hasattr(args, 'num_neighbors') else args.num_neighbors
+    sampling_method = 'neighbor' if not hasattr(args, 'sampling_method') else args.sampling_method
+
+    train_loader_manager = MoEKGCBatchDataLoader(
+        train_data,
         batch_size=args.batch_size,
-        shuffle=True,
+        num_neighbors=num_neighbors,
+        sampling_method=sampling_method,
         num_workers=4,
-        collate_fn=train_dataset.get_collate_fn()
-    )
-    val_loader = DataLoader(
-        val_dataset,
-        batch_size=args.batch_size,
-        shuffle=False,
-        num_workers=4
-    )
-    test_loader = DataLoader(
-        test_dataset,
-        batch_size=args.batch_size,
-        shuffle=False,
-        num_workers=4
+        shuffle=True,
+        mode='train',
+        task=args.task
     )
 
-    logger.info(f"训练集大小: {len(train_dataset)}")
-    logger.info(f"验证集大小: {len(val_dataset)}")
-    logger.info(f"测试集大小: {len(test_dataset)}")
+    # 根据任务获取相应的加载器
+    if args.task == 'link_prediction':
+        train_loader = train_loader_manager.get_link_prediction_loader()
+    else:
+        train_loader = train_loader_manager.get_node_classification_loader()
+
+    # 验证集和测试集的加载器
+    if val_data is not None:
+        val_loader_manager = MoEKGCBatchDataLoader(
+            val_data,
+            batch_size=args.batch_size * 2,  # 验证时使用更大批次
+            num_neighbors=num_neighbors,
+            sampling_method=sampling_method,
+            num_workers=4,
+            shuffle=False,
+            mode='val',
+            task=args.task
+        )
+        
+        if args.task == 'link_prediction':
+            val_loader = val_loader_manager.get_link_prediction_loader()
+        else:
+            val_loader = val_loader_manager.get_node_classification_loader()
+    else:
+        val_loader = None
+
+    if test_data is not None:
+        test_loader_manager = MoEKGCBatchDataLoader(
+            test_data,
+            batch_size=args.batch_size * 2,
+            num_neighbors=num_neighbors,
+            sampling_method=sampling_method,
+            num_workers=4,
+            shuffle=False,
+            mode='test',
+            task=args.task
+        )
+        
+        if args.task == 'link_prediction':
+            test_loader = test_loader_manager.get_link_prediction_loader()
+        else:
+            test_loader = test_loader_manager.get_node_classification_loader()
+    else:
+        test_loader = None
+
+    logger.info(f"数据加载完成:")
+    logger.info(f"  训练批次数: {len(train_loader)}")
+    if val_loader:
+        logger.info(f"  验证批次数: {len(val_loader)}")
+    if test_loader:
+        logger.info(f"  测试批次数: {len(test_loader)}")
+    
+    
+    
 
     # ========== 模型初始化 ==========
     logger.info("初始化模型...")
