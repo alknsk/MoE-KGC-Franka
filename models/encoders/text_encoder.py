@@ -15,6 +15,7 @@ class TextEncoder(nn.Module):
         super().__init__()
         
         self.bert = AutoModel.from_pretrained(model_name)
+        self.bert_hidden_dim = self.bert.config.hidden_size
         self.tokenizer = AutoTokenizer.from_pretrained(model_name)
         
         if freeze_bert:
@@ -23,7 +24,7 @@ class TextEncoder(nn.Module):
         
         # Projection layer
         self.projection = nn.Sequential(
-            nn.Linear(hidden_dim, output_dim),
+            nn.Linear(self.bert_hidden_dim, output_dim),
             nn.LayerNorm(output_dim),
             nn.ReLU(),
             nn.Dropout(dropout_rate)
@@ -31,7 +32,7 @@ class TextEncoder(nn.Module):
         
         # Attention pooling
         self.attention = nn.Sequential(
-            nn.Linear(hidden_dim, 1),
+            nn.Linear(self.bert_hidden_dim, 1),
             nn.Tanh()
         )
         

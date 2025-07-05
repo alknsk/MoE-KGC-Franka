@@ -1,16 +1,17 @@
 #!/usr/bin/env python3
 """端到端训练脚本"""
-
+import os
 import argparse
+os.environ['CUDA_VISIBLE_DEVICES'] = '1,2,3,4,5'  # 只使用1-5号GPU
 import torch
 # import wandb
 import json
 import sys
-import os
 
 sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 # os.environ["CUDA_VISIBLE_DEVICES"] = "1,2,3,4,5"
-os.environ["PYTORCH_CUDA_ALLOC_CONF"] = "max_split_size_mb:512"
+# 设置CUDA环境变量，优化内存使用并避开0号GPU
+os.environ["PYTORCH_CUDA_ALLOC_CONF"] = "max_split_size_mb:256,expandable_segments:True"
 
 from data.dataset import FrankaKGDataset
 from config import get_config
@@ -106,9 +107,9 @@ def main():
     
     if train_pyg_path.exists():
         logger.info("加载预处理的PyG数据...")
-        train_data = torch.load(train_pyg_path)
-        val_data = torch.load(val_pyg_path) if val_pyg_path.exists() else None
-        test_data = torch.load(test_pyg_path) if test_pyg_path.exists() else None
+        train_data = torch.load(train_pyg_path, weights_only=False)
+        val_data = torch.load(val_pyg_path, weights_only=False) if val_pyg_path.exists() else None
+        test_data = torch.load(test_pyg_path, weights_only=False) if test_pyg_path.exists() else None
     else:
         logger.info("创建PyG数据...")
         data_loader = KGDataLoader(config)
@@ -136,8 +137,8 @@ def main():
     logger.info("创建mini-batch数据加载器...")
 
     # 添加批处理相关参数
-    num_neighbors = [25, 10] if not hasattr(args, 'num_neighbors') else args.num_neighbors
-    sampling_method = 'neighbor' if not hasattr(args, 'sampling_method') else args.sampling_method
+    num_neighbors = args.num_neighbors
+    sampling_method = args.sampling_method
 
     train_loader_manager = MoEKGCBatchDataLoader(
         train_data,
@@ -201,12 +202,16 @@ def main():
         logger.info(f"  验证批次数: {len(val_loader)}")
     if test_loader:
         logger.info(f"  测试批次数: {len(test_loader)}")
-    
-    
-    
 
     # ========== 模型初始化 ==========
     logger.info("初始化模型...")
+
+    # 验证CUDA设备设置
+    if torch.cuda.is_available():
+        print(f"可用的CUDA设备数量: {torch.cuda.device_count()}")
+        for i in range(torch.cuda.device_count()):
+            print(f"设备 {i}: {torch.cuda.get_device_name(i)}")
+
     model = MoEKGC(config)
     logger.info(f"模型参数量: {sum(p.numel() for p in model.parameters()):,}")
 

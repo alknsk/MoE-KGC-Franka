@@ -64,6 +64,20 @@ class EnhancedGNNLayer(MessagePassing):
             edge_index: Edge indices [2, num_edges]
             edge_attr: Edge features [num_edges, edge_dim]
         """
+        
+        # 无边时直接做一次线性变换和归一化
+        if edge_index.numel() == 0:
+            if self.concat:
+                out = self.lin_out(torch.zeros(x.size(0), self.heads * self.out_channels, device=x.device, dtype=x.dtype))
+            else:
+                out = self.lin_out(torch.zeros(x.size(0), self.out_channels, device=x.device, dtype=x.dtype))
+            # 残差连接
+            if x.size(-1) == out.size(-1):
+                out = out + x
+            out = self.norm(out)
+            out = self.dropout(out)
+            return out
+        
         # Multi-head transformation
         key = self.lin_key(x).view(-1, self.heads, self.out_channels)
         query = self.lin_query(x).view(-1, self.heads, self.out_channels)
@@ -182,13 +196,17 @@ class EnhancedGNN(nn.Module):
                 f"batch.max()={batch.max().item()} >= x.shape[0]={x.shape[0]}"
             )
         print(f"[DEBUG] input x shape: {x.shape}")
-        print(f"[DEBUG] edge_index shape: {edge_index.shape}, max: {edge_index.max().item()}, min: {edge_index.min().item()}")
-        assert edge_index.max().item() < x.shape[0], (
-            f"edge_index.max()={edge_index.max().item()} >= x.shape[0]={x.shape[0]}"
-        )
-        assert edge_index.min().item() >= 0, (
-            f"edge_index.min()={edge_index.min().item()} < 0"
-        )
+        if edge_index.numel() > 0:
+            print(f"[DEBUG] edge_index shape: {edge_index.shape}, max: {edge_index.max().item()}, min: {edge_index.min().item()}")
+            assert edge_index.max().item() < x.shape[0], (
+                f"edge_index.max()={edge_index.max().item()} >= x.shape[0]={x.shape[0]}"
+            )
+            assert edge_index.min().item() >= 0, (
+                f"edge_index.min()={edge_index.min().item()} < 0"
+            )
+        else:
+            print(f"[DEBUG] edge_index shape: {edge_index.shape}, (empty)")
+        
         if batch is not None:
             print(f"[DEBUG] batch shape: {batch.shape}, batch.max: {batch.max().item()}, batch.min: {batch.min().item()}")
         if edge_attr is not None:
@@ -206,7 +224,7 @@ class EnhancedGNN(nn.Module):
         layer_outputs = [x]
         
         # Apply GNN layers
-        for i, layer in self.gnn_layers:
+        for i, layer in enumerate(self.gnn_layers):
             x = layer(x, edge_index, edge_attr)
             print(f"[DEBUG] after GNN layer {i}, x shape: {x.shape}, x.mean: {x.mean().item():.4f}")
             layer_outputs.append(x)

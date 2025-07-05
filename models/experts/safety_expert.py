@@ -19,53 +19,57 @@ class SafetyExpert(BaseExpert):
         
         self.num_safety_levels = num_safety_levels
         self.constraint_dim = constraint_dim
+        enc_dim = hidden_dims[0] // 3 if len(hidden_dims) > 0 else input_dim // 3
         
         # Force/torque encoder
         self.force_torque_encoder = nn.Sequential(
-            nn.Linear(6, hidden_dims[0] // 3),  # 3 forces + 3 torques
+            nn.Linear(6, enc_dim),  # 3 forces + 3 torques
             nn.ReLU(),
-            nn.Linear(hidden_dims[0] // 3, hidden_dims[0] // 3)
+            nn.Linear(enc_dim, enc_dim)
         )
         
         # Joint limit encoder
         self.joint_limit_encoder = nn.Sequential(
-            nn.Linear(14, hidden_dims[0] // 3),  # 7 joints * 2 (min/max)
+            nn.Linear(14, enc_dim),  # 7 joints * 2 (min/max)
             nn.ReLU(),
-            nn.Linear(hidden_dims[0] // 3, hidden_dims[0] // 3)
+            nn.Linear(enc_dim, enc_dim)
         )
         
         # Collision detector
+        det_hidden = hidden_dims[1] if len(hidden_dims) > 1 else hidden_dims[0] if len(hidden_dims) > 0 else output_dim
         self.collision_detector = nn.Sequential(
-            nn.Linear(output_dim, hidden_dims[1]),
+            nn.Linear(output_dim, det_hidden),
             nn.ReLU(),
             nn.Dropout(dropout_rate),
-            nn.Linear(hidden_dims[1], 1),
+            nn.Linear(det_hidden, 1),
             nn.Sigmoid()
         )
         
         # Safety level classifier
         self.safety_classifier = nn.Sequential(
-            nn.Linear(output_dim, hidden_dims[1]),
+            nn.Linear(output_dim, det_hidden),
             nn.ReLU(),
             nn.Dropout(dropout_rate),
-            nn.Linear(hidden_dims[1], num_safety_levels)
+            nn.Linear(det_hidden, num_safety_levels)
         )
         
         # Constraint satisfaction network
+        constr_hidden0 = hidden_dims[0] if len(hidden_dims) > 0 else output_dim
+        constr_hidden1 = hidden_dims[1] if len(hidden_dims) > 1 else constr_hidden0
         self.constraint_network = nn.Sequential(
-            nn.Linear(output_dim + constraint_dim, hidden_dims[0]),
+            nn.Linear(output_dim + constraint_dim, constr_hidden0),
             nn.ReLU(),
             nn.Dropout(dropout_rate),
-            nn.Linear(hidden_dims[0], hidden_dims[1]),
+            nn.Linear(constr_hidden0, constr_hidden1),
             nn.ReLU(),
-            nn.Linear(hidden_dims[1], 1),
+            nn.Linear(constr_hidden1, 1),
             nn.Sigmoid()
         )
         
         # Risk assessment module
         self.risk_assessor = nn.GRU(
             input_size=output_dim,
-            hidden_size=hidden_dims[1],
+            hidden_size=det_hidden,
             num_layers=2,
             batch_first=True,
             dropout=dropout_rate
@@ -73,7 +77,7 @@ class SafetyExpert(BaseExpert):
         
         self.feature_proj = None  # 动态创建投影层
     
-        self.safety_feature_projection = nn.Linear((hidden_dims[0] // 3) * 3, input_dim)
+        self.safety_feature_projection = nn.Linear(enc_dim * 3, input_dim)
 
     def compute_expert_features(self, x: torch.Tensor, **kwargs) -> torch.Tensor:
         """Compute safety-related features"""

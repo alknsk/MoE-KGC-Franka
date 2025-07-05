@@ -7,23 +7,23 @@ from pathlib import Path
 @dataclass
 class ExpertConfig:
     """单个专家模块的配置"""
-    hidden_dims: list = field(default_factory=lambda: [512, 256])  # 专家网络的隐藏层维度
+    hidden_dims: list = field(default_factory=lambda: [128])  # 专家网络的隐藏层维度,原来是[512, 256]
     use_attention: bool = True  # 是否在专家中使用注意力机制
     dropout_rate: float = 0.1   # dropout概率，防止过拟合
 
 @dataclass
 class GatingConfig:
     """门控机制的配置"""
-    hidden_dim: int = 256
-    temperature: float = 1.0  # softmax温度参数，影响门控分布的平滑程度
-    noise_std: float = 0.1    # 门控噪声标准差，用于增加探索性
+    hidden_dim: int = 256     #原先为256
+    temperature: float = 0.5  # softmax温度参数，影响门控分布的平滑程度
+    noise_std: float = 0.05    # 门控噪声标准差，用于增加探索性
     top_k: int = 2            # 每次选择前k个专家
     load_balancing_weight: float = 0.01  # 负载均衡损失的权重
 
 @dataclass
 class GraphConfig:
     """图神经网络层的配置"""
-    num_layers: int = 3           # 图神经网络的层数
+    num_layers: int = 1           # 图神经网络的层数，原来是3
     aggregation: str = "mean"     # 聚合方式，如mean/sum/max
     use_edge_features: bool = True  # 是否使用边特征
     edge_hidden_dim: int = 128    # 边特征的隐藏层维度
@@ -31,15 +31,15 @@ class GraphConfig:
 @dataclass
 class TrainingConfig:
     """训练过程相关配置"""
-    batch_size: int = 32          # 批大小
+    batch_size: int = 4          # 批大小
     learning_rate: float = 1e-4   # 学习率
     weight_decay: float = 1e-5    # 权重衰减（L2正则化）
     epochs: int = 100             # 训练轮数
     gradient_clip: float = 1.0    # 梯度裁剪阈值，防止梯度爆炸
     warmup_steps: int = 1000      # 学习率预热步数
     scheduler: str = "cosine"     # 学习率调度器类型
-    accumulation_steps: int = 1   # 新增这一行
-    mixed_precision: bool = False
+    accumulation_steps: int = 8   # 新增这一行
+    mixed_precision: bool = True
     empty_cache_freq: int = 10
     gating_loss_weight: float = 0.01
 
@@ -63,7 +63,7 @@ class FrankaConfig:
 class ModelConfig:
     """主模型配置"""
     name: str = "MoE-KGC-Franka"  # 模型名称
-    hidden_dim: int = 768         # 主体隐藏层维度
+    hidden_dim: int = 128         # 主体隐藏层维度，原先是768
     num_experts: int = 5          # 专家数量
     expert_hidden_dim: int = 512  # 专家隐藏层维度
     num_heads: int = 12           # 多头注意力头数

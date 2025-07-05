@@ -1,9 +1,9 @@
 # 模型配置
 model:
   name: "MoE-KGC-Franka" # 模型名称
-  hidden_dim: 768 # 隐藏层维度
+  hidden_dim: 128 # 隐藏层维度（原768）
   num_experts: 5 # 专家数量
-  expert_hidden_dim: 512 # 专家网络隐藏层维度
+  expert_hidden_dim: 128 # 专家网络隐藏层维度（原512）
   num_heads: 12 # 注意力头数量
   dropout_rate: 0.1 # 丢弃率
   activation: "gelu"  # 激活函数
@@ -11,7 +11,7 @@ model:
 # mini-batch数据加载配置
 dataloader:
   batch_size: 4
-  num_neighbors: [25, 10]  # 每层采样的邻居数
+  num_neighbors: [15, 5]  # 每层采样的邻居数
   sampling_method: "neighbor"  # neighbor, cluster, graphsaint
   num_workers: 4
   pin_memory: true
@@ -27,32 +27,32 @@ dataloader:
 # 专家配置
 experts:
   action_expert:
-    hidden_dims: [512, 256] # 动作专家网络隐藏层维度
+    hidden_dims: [128] # 动作专家网络隐藏层维度,原来是[512, 256]
     use_attention: true # 是否使用注意力机制
   spatial_expert:
-    hidden_dims: [512, 256] # 空间专家网络隐藏层维度
+    hidden_dims: [128] # 空间专家网络隐藏层维度
     use_attention: true # 是否使用注意力机制
   temporal_expert:
-    hidden_dims: [512, 256] # 时间专家网络隐藏层维度
+    hidden_dims: [128] # 时间专家网络隐藏层维度
     use_attention: true # 是否使用注意力机制
   semantic_expert:
-    hidden_dims: [512, 256] # 语义专家网络隐藏层维度
+    hidden_dims: [128] # 语义专家网络隐藏层维度
     use_attention: true # 是否使用注意力机制
   safety_expert:
-    hidden_dims: [512, 256] # 安全专家网络隐藏层维度
+    hidden_dims: [128] # 安全专家网络隐藏层维度
     use_attention: true # 是否使用注意力机制
 
 # 门控系统配置
 gating:
-  temperature: 1.0  # 门控温度
-  noise_std: 0.1  #  噪声标准差
+  temperature: 0.5  # 门控温度
+  noise_std: 0.05  #  噪声标准差
   top_k: 2  # 选择的前k个专家
   load_balancing_weight: 0.01  # 负载均衡权重
   hidden_dim: 256
 
 # 图配置
 graph:
-  num_layers: 3 #图神经网络层数
+  num_layers: 1 #图神经网络层数，原来是3
   aggregation: "mean" # 聚合方式
   use_edge_features: true  # 是否使用边特征
   edge_hidden_dim: 128 # 边特征隐藏层维度
@@ -68,9 +68,9 @@ training:
   scheduler: "cosine" # 学习率调度器
 
   # Mini-batch特定配置
-  accumulation_steps: 4  # 梯度累积（目前试试4，如果不行再加）
+  accumulation_steps: 16  # 梯度累积（目前试试4，如果不行再加）
   mixed_precision: true  # 混合精度训练
-  empty_cache_freq: 10  # 清理GPU缓存频率
+  empty_cache_freq: 5  # 清理GPU缓存频率
   
   # 正则化
   gating_loss_weight: 0.01
@@ -128,5 +128,5 @@ visualization:
 
 # 内存优化
 memory_optimization:
-  max_nodes_per_batch: 5000  # 每个批次的最大节点数
-  gradient_checkpointing: false
+  max_nodes_per_batch: 1500  # 每个批次的最大节点数
+  gradient_checkpointing: true

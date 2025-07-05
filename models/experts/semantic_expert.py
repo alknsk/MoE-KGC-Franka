@@ -21,47 +21,51 @@ class SemanticExpert(BaseExpert):
         self.num_semantic_categories = num_semantic_categories
         
         # Word embedding
-        self.word_embedding = nn.Embedding(vocab_size, hidden_dims[0] // 2)
+        emb_dim = hidden_dims[0] // 2 if len(hidden_dims) > 0 else input_dim // 2
+        self.word_embedding = nn.Embedding(vocab_size, emb_dim)
         
         # Concept embedding
         self.concept_embedding = nn.Sequential(
-            nn.Linear(input_dim, hidden_dims[0]),
+            nn.Linear(input_dim, hidden_dims[0] if len(hidden_dims) > 0 else input_dim),
             nn.ReLU(),
-            nn.Linear(hidden_dims[0], hidden_dims[0] // 2)
+            nn.Linear(hidden_dims[0] if len(hidden_dims) > 0 else input_dim, emb_dim)
         )
         
         # Semantic category classifier
+        cat_hidden = hidden_dims[1] if len(hidden_dims) > 1 else hidden_dims[0] if len(hidden_dims) > 0 else output_dim
         self.category_classifier = nn.Sequential(
-            nn.Linear(output_dim, hidden_dims[1]),
+            nn.Linear(output_dim, cat_hidden),
             nn.ReLU(),
             nn.Dropout(dropout_rate),
-            nn.Linear(hidden_dims[1], num_semantic_categories)
+            nn.Linear(cat_hidden, num_semantic_categories)
         )
         
         # Relation embedding network
+        rel_hidden0 = hidden_dims[0] if len(hidden_dims) > 0 else output_dim
+        rel_hidden1 = hidden_dims[1] if len(hidden_dims) > 1 else rel_hidden0
         self.relation_encoder = nn.Sequential(
-            nn.Linear(output_dim * 2, hidden_dims[0]),
+            nn.Linear(output_dim * 2, rel_hidden0),
             nn.ReLU(),
             nn.Dropout(dropout_rate),
-            nn.Linear(hidden_dims[0], hidden_dims[1])
+            nn.Linear(rel_hidden0, rel_hidden1)
         )
         
         # Cross-modal attention
         self.cross_attention = nn.MultiheadAttention(
-            embed_dim=hidden_dims[0] // 2,
+            embed_dim=emb_dim,
             num_heads=8,
             dropout=dropout_rate
         )
         
         # Semantic similarity head
         self.similarity_head = nn.Sequential(
-            nn.Linear(output_dim * 2, hidden_dims[1]),
+            nn.Linear(output_dim * 2, cat_hidden),
             nn.ReLU(),
-            nn.Linear(hidden_dims[1], 1),
+            nn.Linear(cat_hidden, 1),
             nn.Sigmoid()
         )
         
-        self.semantic_feature_projection = nn.Linear((hidden_dims[0] // 2) * 2, input_dim)
+        self.semantic_feature_projection = nn.Linear(emb_dim * 2, input_dim)
 
     def compute_expert_features(self, x: torch.Tensor, **kwargs) -> torch.Tensor:
         """Compute semantic features"""

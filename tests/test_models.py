@@ -23,7 +23,7 @@ class TestModels(unittest.TestCase):
         self.device = torch.device('cpu')
         self.batch_size = 4
         self.seq_len = 10
-        self.hidden_dim = 256
+        self.hidden_dim = self.config.hidden_dim  # 使用配置中的值
         self.num_nodes = 20
 
     def test_action_expert(self):
@@ -182,8 +182,20 @@ class TestModels(unittest.TestCase):
         # Create dummy batch
         batch = {
             'text_inputs': {
-                'input_ids': torch.randint(0, 1000, (self.batch_size, 128)),
-                'attention_mask': torch.ones(self.batch_size, 128)
+                'input_ids': torch.randint(0, 1000, (self.num_nodes, 128)),
+                'attention_mask': torch.ones(self.num_nodes, 128)
+            },
+            'tabular_inputs': {
+                'numerical': torch.randn(self.num_nodes, 3),
+                'categorical': {
+                    'action': torch.zeros(self.num_nodes, dtype=torch.long),
+                    'object_id': torch.zeros(self.num_nodes, dtype=torch.long)
+                }
+            },
+            'structured_inputs': {
+                'task_features': torch.zeros(self.num_nodes, 256),
+                'constraint_features': torch.zeros(self.num_nodes, 256),
+                'safety_features': torch.zeros(self.num_nodes, 256)
             },
             'node_features': torch.randn(self.num_nodes, self.hidden_dim),
             'edge_index': torch.randint(0, self.num_nodes, (2, 50)),

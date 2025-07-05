@@ -19,11 +19,12 @@ class TemporalExpert(BaseExpert):
         
         self.num_temporal_relations = num_temporal_relations
         self.max_sequence_length = max_sequence_length
+        lstm_hidden = hidden_dims[0] if len(hidden_dims) > 0 else input_dim
         
         # LSTM for sequence modeling
         self.lstm = nn.LSTM(
             input_size=input_dim,
-            hidden_size=hidden_dims[0],
+            hidden_size=lstm_hidden,
             num_layers=2,
             batch_first=True,
             dropout=dropout_rate,
@@ -33,27 +34,29 @@ class TemporalExpert(BaseExpert):
         # Transformer for long-range dependencies
         self.transformer = nn.TransformerEncoder(
             nn.TransformerEncoderLayer(
-                d_model=hidden_dims[0] * 2,  # Bidirectional LSTM
+                d_model=lstm_hidden * 2,  # Bidirectional LSTM
                 nhead=8,
-                dim_feedforward=hidden_dims[0] * 4,
+                dim_feedforward=lstm_hidden * 4,
                 dropout=dropout_rate
             ),
             num_layers=2
         )
         
         # Temporal relation classifier
+        rel_hidden = hidden_dims[1] if len(hidden_dims) > 1 else lstm_hidden
         self.temporal_classifier = nn.Sequential(
-            nn.Linear(output_dim * 2, hidden_dims[1]),
+            nn.Linear(output_dim * 2, rel_hidden),
             nn.ReLU(),
             nn.Dropout(dropout_rate),
-            nn.Linear(hidden_dims[1], num_temporal_relations)
+            nn.Linear(rel_hidden, num_temporal_relations)
         )
         
         # Time embedding
+        time_emb_dim = lstm_hidden // 4
         self.time_embedding = nn.Sequential(
-            nn.Linear(1, hidden_dims[0] // 4),
+            nn.Linear(1, time_emb_dim),
             nn.ReLU(),
-            nn.Linear(hidden_dims[0] // 4, hidden_dims[0] // 4)
+            nn.Linear(time_emb_dim, time_emb_dim)
         )
         
         # Positional encoding

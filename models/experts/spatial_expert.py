@@ -19,27 +19,29 @@ class SpatialExpert(BaseExpert):
         
         self.workspace_dim = workspace_dim
         self.num_spatial_relations = num_spatial_relations
+        pos_dim = hidden_dims[0] // 3 if len(hidden_dims) > 0 else input_dim // 3
         
         # Position encoder
         self.position_encoder = nn.Sequential(
-            nn.Linear(workspace_dim, hidden_dims[0] // 3),
+            nn.Linear(workspace_dim, pos_dim),
             nn.ReLU(),
-            nn.Linear(hidden_dims[0] // 3, hidden_dims[0] // 3)
+            nn.Linear(pos_dim, pos_dim)
         )
         
         # Orientation encoder (quaternion or euler angles)
         self.orientation_encoder = nn.Sequential(
-            nn.Linear(4, hidden_dims[0] // 3),  # Quaternion input
+            nn.Linear(4, pos_dim),  # Quaternion input
             nn.ReLU(),
-            nn.Linear(hidden_dims[0] // 3, hidden_dims[0] // 3)
+            nn.Linear(pos_dim, pos_dim)
         )
         
         # Spatial relation classifier
+        rel_hidden = hidden_dims[1] if len(hidden_dims) > 1 else hidden_dims[0] if len(hidden_dims) > 0 else output_dim
         self.relation_classifier = nn.Sequential(
-            nn.Linear(output_dim * 2, hidden_dims[1]),
+            nn.Linear(output_dim * 2, rel_hidden),
             nn.ReLU(),
             nn.Dropout(dropout_rate),
-            nn.Linear(hidden_dims[1], num_spatial_relations)
+            nn.Linear(rel_hidden, num_spatial_relations)
         )
         
         # 3D convolution for voxel grid processing
@@ -53,12 +55,12 @@ class SpatialExpert(BaseExpert):
         
         # Spatial transformer network components
         self.localization = nn.Sequential(
-            nn.Linear(hidden_dims[0], 128),
+            nn.Linear(hidden_dims[0] if len(hidden_dims) > 0 else input_dim, 128),
             nn.ReLU(),
             nn.Linear(128, 3 * 4)  # 3x4 affine transformation matrix
         )
     
-        self.spatial_feature_projection = nn.Linear((hidden_dims[0] // 3) * 3, input_dim)  # 3分量最大拼接
+        self.spatial_feature_projection = nn.Linear(pos_dim * 3, input_dim)  # 3分量最大拼接
 
     def compute_expert_features(self, x: torch.Tensor, **kwargs) -> torch.Tensor:
         """Compute spatial features"""

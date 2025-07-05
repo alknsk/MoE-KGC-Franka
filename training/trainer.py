@@ -27,7 +27,7 @@ class Trainer:
         self.device = device or torch.device('cuda' if torch.cuda.is_available() else 'cpu')
         # self.model.to(self.device)
         self.use_amp = getattr(config.training, 'mixed_precision', False)
-        self.scaler = GradScaler(enabled=self.use_amp)
+        self.scaler = torch.amp.GradScaler('cuda', enabled=self.use_amp)
         
         print("weight_decay:", config.training.weight_decay, type(config.training.weight_decay))
         
@@ -91,7 +91,7 @@ class Trainer:
             is_accumulation_step = (batch_idx + 1) % getattr(self.config.training, 'accumulation_steps', 1) != 0
             
             # 混合精度训练
-            with torch.cuda.amp.autocast(enabled = getattr(self.config.training,'mixed_precision', False)):
+            with torch.amp.autocast('cuda', enabled = getattr(self.config.training,'mixed_precision', False)):
                 # 前向传播
                 outputs = self.model(batch, task=task)
                 

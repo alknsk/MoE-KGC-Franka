@@ -20,26 +20,27 @@ class ActionExpert(BaseExpert):
         self.action_vocab_size = action_vocab_size
         
         # Joint position encoder
+        joint_dim = hidden_dims[0] // 2 if len(hidden_dims) > 0 else input_dim // 2
         self.joint_encoder = nn.Sequential(
-            nn.Linear(num_joints, hidden_dims[0] // 2),
+            nn.Linear(num_joints, joint_dim),
             nn.ReLU(),
-            nn.Linear(hidden_dims[0] // 2, hidden_dims[0] // 2)
+            nn.Linear(joint_dim, joint_dim)
         )
         
         # Velocity encoder (for dynamic actions)
         self.velocity_encoder = nn.Sequential(
-            nn.Linear(num_joints, hidden_dims[0] // 2),
+            nn.Linear(num_joints, joint_dim),
             nn.ReLU(),
-            nn.Linear(hidden_dims[0] // 2, hidden_dims[0] // 2)
+            nn.Linear(joint_dim, joint_dim)
         )
         
         # Action embedding
-        self.action_embedding = nn.Embedding(action_vocab_size, hidden_dims[0] // 2)
+        self.action_embedding = nn.Embedding(action_vocab_size, joint_dim)
         
         # Temporal convolution for action sequences
         self.temporal_conv = nn.Conv1d(
-            in_channels=hidden_dims[0],
-            out_channels=hidden_dims[0],
+            in_channels=hidden_dims[0] if len(hidden_dims) > 0 else input_dim,
+            out_channels=hidden_dims[0] if len(hidden_dims) > 0 else input_dim,
             kernel_size=3,
             padding=1
         )
@@ -50,7 +51,7 @@ class ActionExpert(BaseExpert):
         self.feature_proj = None  # 动态创建投影层
     
         # 最多拼接3个分量（这里乘3了）
-        self.action_feature_projection = nn.Linear((hidden_dims[0] // 2) * 3, input_dim)
+        self.action_feature_projection = nn.Linear(joint_dim * 3, input_dim)
         
     def compute_expert_features(self, x: torch.Tensor, **kwargs) -> torch.Tensor:
         """
@@ -97,26 +98,26 @@ class ActionExpert(BaseExpert):
         
         projected = self.dynamic_projection(combined)
         return projected
+    
+    def predict_action(self, x: torch.Tensor, **kwargs) -> Dict[str, torch.Tensor]:
+        """Predict next action"""
+        output = self.forward(x, **kwargs)
+        action_logits = self.action_classifier(output)
+        action_probs = torch.softmax(action_logits, dim=-1)
+            
+        return {
+            'logits': action_logits,
+            'probabilities': action_probs,
+            'predicted_action': torch.argmax(action_probs, dim=-1)
+        }
         
-        def predict_action(self, x: torch.Tensor, **kwargs) -> Dict[str, torch.Tensor]:
-            """Predict next action"""
-            output = self.forward(x, **kwargs)
-            action_logits = self.action_classifier(output)
-            action_probs = torch.softmax(action_logits, dim=-1)
+    def compute_action_similarity(self, action1: torch.Tensor, action2: torch.Tensor) -> torch.Tensor:
+        """Compute similarity between two actions"""
+        # Encode both actions
+        enc1 = self.forward(action1)
+        enc2 = self.forward(action2)
             
-            return {
-                'logits': action_logits,
-                'probabilities': action_probs,
-                'predicted_action': torch.argmax(action_probs, dim=-1)
-            }
-        
-        def compute_action_similarity(self, action1: torch.Tensor, action2: torch.Tensor) -> torch.Tensor:
-            """Compute similarity between two actions"""
-            # Encode both actions
-            enc1 = self.forward(action1)
-            enc2 = self.forward(action2)
+        # Compute cosine similarity
+        similarity = torch.cosine_similarity(enc1, enc2, dim=-1)
             
-            # Compute cosine similarity
-            similarity = torch.cosine_similarity(enc1, enc2, dim=-1)
-            
-            return similarity
+        return similarity
