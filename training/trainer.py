@@ -100,9 +100,9 @@ class Trainer:
                 total_loss = loss_dict['total_loss']
                 
                 # 添加门控损失
-                if 'gating_loss' in outputs:
-                    gating_weight = getattr(self.config.training, 'gating_loss_weight', 0.01)
-                    total_loss = total_loss + gating_weight * outputs['gating_loss']
+                # if 'gating_loss' in outputs:
+                #    gating_weight = getattr(self.config.training, 'gating_loss_weight', 0.01)
+                #    total_loss = total_loss + gating_weight * outputs['gating_loss']
             
             # 梯度累积归一化
             if getattr(self.config.training, 'accumulation_steps', 1) > 1:

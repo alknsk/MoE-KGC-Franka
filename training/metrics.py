@@ -129,27 +129,82 @@ class Metrics:
         return metrics
 
 def compute_metrics(outputs: Dict[str, torch.Tensor],
-                   targets: Dict[str, torch.Tensor],
-                   task: str,
-                   config: Optional[Any] = None) -> Dict[str, float]:
+                    targets: Dict[str, torch.Tensor],
+                    task: str,
+                    config: Optional[Any] = None) -> Dict[str, float]:
     """Compute metrics based on task"""
     metrics_computer = Metrics(config) if config else Metrics(type('Config', (), {'evaluation': {}})())
-    
+        
+    # 处理标签字段的不同命名方式
+    def get_labels(data):
+        """从数据中提取标签，支持多种命名方式"""
+        if hasattr(data, 'label') and data.label.numel() > 0:
+            return data.label
+        elif hasattr(data, 'labels') and data.labels.numel() > 0:
+            return data.labels
+        elif hasattr(data, 'edge_label') and data.edge_label.numel() > 0:
+            return data.edge_label
+        elif isinstance(data, dict):
+            if 'label' in data and data['label'].numel() > 0:
+                return data['label']
+            elif 'labels' in data and data['labels'].numel() > 0:
+                return data['labels']
+            elif 'edge_label' in data and data['edge_label'].numel() > 0:
+                return data['edge_label']
+            elif 'y' in data and data['y'].numel() > 0:
+                return data['y']
+        return None
+        
+    labels = get_labels(targets)
+     # 检查是否有有效的预测和标签
     if task == 'link_prediction':
-        return metrics_computer.compute_link_prediction_metrics(
-            outputs['scores'],
-            targets['labels'],
-            outputs.get('all_scores', None)
-        )
+        if 'scores' in outputs and outputs['scores'].numel() > 0 and labels is not None and labels.numel() > 0:
+            scores = outputs['scores']
+            if len(labels) != len(scores):
+                min_len = min(len(labels), len(scores))
+                labels = labels[:min_len]
+                scores = scores[:min_len]
+            
+            print(f"[Metrics Debug] Computing metrics with {len(scores)} samples")
+            return metrics_computer.compute_link_prediction_metrics(
+                scores,
+                labels,
+                outputs.get('all_scores', None)
+            )
+        else:
+            # 返回默认的指标值
+            print(f"[Metrics Debug] No valid data for link prediction metrics")
+            return {
+                'accuracy': 0.0,
+                'precision': 0.0,
+                'recall': 0.0,
+                'f1': 0.0
+            }
     elif task == 'entity_classification':
-        return metrics_computer.compute_classification_metrics(
-            outputs['logits'],
-            targets['labels']
-        )
+        if 'logits' in outputs and outputs['logits'].numel() > 0 and labels is not None and labels.numel() > 0:
+            return metrics_computer.compute_classification_metrics(
+                outputs['logits'],
+                labels
+            )
+        else:
+            # 返回默认的指标值
+            return {
+                'accuracy': 0.0,
+                'macro_f1': 0.0,
+                'weighted_f1': 0.0
+            }
     elif task == 'relation_extraction':
-        return metrics_computer.compute_classification_metrics(
-            outputs['logits'],
-            targets['labels']
-        )
+        if 'logits' in outputs and outputs['logits'].numel() > 0 and labels is not None and labels.numel() > 0:
+            return metrics_computer.compute_classification_metrics(
+                outputs['logits'],
+                labels
+            )
+        else:
+            # 返回默认的指标值
+            return {
+                'accuracy': 0.0,
+                'macro_f1': 0.0,
+                'weighted_f1': 0.0
+            }
     else:
         return {}

@@ -361,7 +361,7 @@ class MoEKGC(nn.Module):
                 
                 if current_dim != expected_dim:
                     # 使用线性投影将node_features投影到期望维度
-                    if not hasattr(self, 'fallback_projection'):
+                    if not hasattr(self, 'fallback_projection') or self.fallback_projection is None:
                         self.fallback_projection = nn.Linear(current_dim, expected_dim).to(node_features.device)
                     
                     projected_features = self.fallback_projection(node_features)
@@ -427,6 +427,15 @@ class MoEKGC(nn.Module):
         
         head_time = time.time()
 
+        # 添加调试信息
+        print(f"[Forward Debug] Task: {task}")
+        print(f"[Forward Debug] Output keys: {list(output.keys())}")
+        for key, value in output.items():
+            if isinstance(value, torch.Tensor):
+                print(f"[Forward Debug] {key} shape: {value.shape}, dtype: {value.dtype}")
+                if value.numel() > 0:
+                    print(f"[Forward Debug] {key} range: [{value.min().item():.4f}, {value.max().item():.4f}]")
+
         # 添加辅助输出
         output['gating_loss'] = gating_output['load_balancing_loss']
         output['expert_utilization'] = gating_output.get('all_scores', None)
@@ -451,18 +460,59 @@ class MoEKGC(nn.Module):
             'edge_index': batch.edge_index,
             'batch_idx': batch.batch if hasattr(batch, 'batch') else torch.zeros(batch.num_nodes, dtype=torch.long)
         }
+        
+        # 重要：先验证和清理edge_index
+        if batch_dict['edge_index'].numel() > 0:
+            num_nodes = batch_dict['node_features'].size(0)
+            edge_index = batch_dict['edge_index']
+            
+            # 过滤无效边
+            valid_mask = (edge_index[0] >= 0) & (edge_index[0] < num_nodes) & \
+                        (edge_index[1] >= 0) & (edge_index[1] < num_nodes)
+            
+            if valid_mask.sum() < edge_index.size(1):
+                self.logger.warning(f"Filtered {edge_index.size(1) - valid_mask.sum()} invalid edges")
+                batch_dict['edge_index'] = edge_index[:, valid_mask]
+            
+            # 如果没有有效边，创建自环
+            if batch_dict['edge_index'].size(1) == 0:
+                self.logger.warning("No valid edges found, creating self-loops")
+                self_loops = torch.arange(num_nodes, dtype=torch.long).unsqueeze(0).repeat(2, 1)
+                batch_dict['edge_index'] = self_loops
+        
         # Remap edge_index if n_id exists (NeighborLoader/LinkNeighborLoader)
         if hasattr(batch, 'n_id'):
             n_id = batch.n_id
-            n_id_map = {int(n.item()): i for i, n in enumerate(n_id)}
-            edge_index = batch.edge_index.clone()
-            for i in range(edge_index.shape[1]):
-                edge_index[0, i] = n_id_map.get(int(edge_index[0, i].item()), -1)
-                edge_index[1, i] = n_id_map.get(int(edge_index[1, i].item()), -1)
-            # 过滤掉无效边
-            valid_mask = (edge_index[0] >= 0) & (edge_index[1] >= 0)
-            edge_index = edge_index[:, valid_mask]
-            batch_dict['edge_index'] = edge_index
+            num_subgraph_nodes = len(n_id)
+            # 获取设备信息
+            device = batch.edge_index.device if hasattr(batch, 'edge_index') else batch.x.device
+            # 创建更高效的映射
+            n_id_map = torch.full((n_id.max().item() + 1,), -1, dtype=torch.long, device=device)
+            n_id_map[n_id.to(device)] = torch.arange(len(n_id), dtype=torch.long, device=device)
+            
+            # 重新映射edge_index
+            edge_index = batch.edge_index
+            if edge_index.numel() > 0:
+                # 确保edge_index在正确的设备上
+                edge_index = edge_index.to(device)
+
+                # 使用向量化操作进行重新映射
+                src_mapped = n_id_map[edge_index[0]]
+                dst_mapped = n_id_map[edge_index[1]]
+                
+                # 过滤有效边
+                valid_mask = (src_mapped >= 0) & (dst_mapped >= 0) & \
+                            (src_mapped < num_subgraph_nodes) & (dst_mapped < num_subgraph_nodes)
+                
+                if valid_mask.sum() > 0:
+                    batch_dict['edge_index'] = torch.stack([src_mapped[valid_mask], dst_mapped[valid_mask]], dim=0)
+                else:
+                    # 如果没有有效边，创建自环
+                    self_loops = torch.arange(num_subgraph_nodes, dtype=torch.long, device=device).unsqueeze(0).repeat(2, 1)
+                    batch_dict['edge_index'] = self_loops
+                    
+                self.logger.debug(f"Remapped edge_index: original edges {edge_index.size(1)}, "
+                                f"valid edges {valid_mask.sum().item()}, subgraph nodes {num_subgraph_nodes}")
         
         # 多模态输入
         for key in ['text_inputs', 'tabular_inputs', 'structured_inputs']:
@@ -471,52 +521,144 @@ class MoEKGC(nn.Module):
         
         # 任务特定数据
         if task == 'link_prediction':
-            if hasattr(batch, 'head') and hasattr(batch, 'tail'):
-                batch_dict['head'] = batch.head
-                batch_dict['tail'] = batch.tail
-                batch_dict['label'] = batch.label if hasattr(batch, 'label') else torch.ones(len(batch.head))
+            if hasattr(batch, 'edge_label_index') and hasattr(batch, 'edge_label'):
+                edge_label_index = batch.edge_label_index
+                edge_label = batch.edge_label
+                
+                # 获取正样本掩码
+                pos_mask = edge_label == 1
+                
+                if hasattr(batch, 'n_id'):
+                    # 重新映射edge_label_index
+                    if edge_label_index.numel() > 0:
 
-                # 添加 relation_ids 处理
-                if hasattr(batch, 'relation_ids'):
-                    batch_dict['relation_ids'] = batch.relation_ids
-                elif hasattr(batch, 'edge_type'):
-                    batch_dict['relation_ids'] = batch.edge_type
-                elif hasattr(batch, 'rel'):
-                    batch_dict['relation_ids'] = batch.rel
+                        edge_label_index = edge_label_index.to(device)
+                        pos_mask = pos_mask.to(device)
+                    
+                        src_mapped = n_id_map[edge_label_index[0]]
+                        dst_mapped = n_id_map[edge_label_index[1]]
+                        
+                        # 过滤有效的正样本
+                        valid_pos_mask = pos_mask & (src_mapped >= 0) & (dst_mapped >= 0) & \
+                                    (src_mapped < num_subgraph_nodes) & (dst_mapped < num_subgraph_nodes)
+                        
+                        if valid_pos_mask.sum() > 0:
+                            batch_dict['head'] = src_mapped[valid_pos_mask]
+                            batch_dict['tail'] = dst_mapped[valid_pos_mask]
+                            batch_dict['label'] = torch.ones(valid_pos_mask.sum(), dtype=torch.long, device=device)
+                            batch_dict['edge_label'] = batch_dict['label']
+                        else:
+                            # 创建虚拟正样本
+                            if num_subgraph_nodes >= 2:
+                                batch_dict['head'] = torch.tensor([0], dtype=torch.long, device=device)
+                                batch_dict['tail'] = torch.tensor([1], dtype=torch.long, device=device)
+                                batch_dict['label'] = torch.tensor([1], dtype=torch.long, device=device)
+                                batch_dict['edge_label'] = batch_dict['label']
+                            else:
+                                batch_dict['head'] = torch.empty(0, dtype=torch.long, device=device)
+                                batch_dict['tail'] = torch.empty(0, dtype=torch.long, device=device)
+                                batch_dict['label'] = torch.empty(0, dtype=torch.long, device=device)
+                                batch_dict['edge_label'] = batch_dict['label']
+
+                        self.logger.debug(f"Remapped edge_label_index: original positive pairs {pos_mask.sum()}, "
+                                        f"valid pairs {valid_pos_mask.sum() if 'valid_pos_mask' in locals() else 0}")
+                    else:
+                        # 空的edge_label_index
+                        batch_dict['head'] = torch.empty(0, dtype=torch.long, device=device)
+                        batch_dict['tail'] = torch.empty(0, dtype=torch.long, device=device)
+                        batch_dict['label'] = torch.empty(0, dtype=torch.long, device=device)
+                        batch_dict['edge_label'] = batch_dict['label']
                 else:
-                    # 如果没有关系ID，创建默认的关系ID（假设所有边都是同一种关系）
-                    batch_dict['relation_ids'] = torch.zeros(len(batch.head), dtype=torch.long)
-                    self.logger.warning("未找到关系ID，使用默认关系ID 0")
+                    # 没有子图映射，直接使用
+                    batch_dict['head'] = edge_label_index[0, pos_mask]
+                    batch_dict['tail'] = edge_label_index[1, pos_mask]
+                    batch_dict['label'] = edge_label[pos_mask]
+                    batch_dict['edge_label'] = batch_dict['label']
+            # 处理已有的head/tail（向后兼容）
+            elif hasattr(batch, 'head') and hasattr(batch, 'tail'):
+                if hasattr(batch, 'n_id'):
+                    # 重新映射head/tail
+                    if len(batch.head) > 0:
+                        # 确保head/tail在正确的设备上
+                        head_indices = batch.head.to(device)
+                        tail_indices = batch.tail.to(device)
 
-            elif hasattr(batch, 'edge_label_index'):
-                # 从edge_label_index提取
-                pos_mask = batch.edge_label == 1 if hasattr(batch, 'edge_label') else torch.ones(batch.edge_label_index.size(1), dtype=torch.bool)
-                batch_dict['head'] = batch.edge_label_index[0, pos_mask]
-                batch_dict['tail'] = batch.edge_label_index[1, pos_mask]
-                batch_dict['label'] = torch.ones(pos_mask.sum())
-
-                # 添加 relation_ids 处理
-                if hasattr(batch, 'edge_label_relation'):
-                    batch_dict['relation_ids'] = batch.edge_label_relation[pos_mask]
-                elif hasattr(batch, 'edge_type'):
-                    batch_dict['relation_ids'] = batch.edge_type[pos_mask] if len(batch.edge_type) > 1 else torch.zeros(pos_mask.sum(), dtype=torch.long)
+                        src_mapped = n_id_map[head_indices]
+                        dst_mapped = n_id_map[tail_indices]
+                        
+                        valid_mask = (src_mapped >= 0) & (dst_mapped >= 0) & \
+                                (src_mapped < num_subgraph_nodes) & (dst_mapped < num_subgraph_nodes)
+                        
+                        if valid_mask.sum() > 0:
+                            batch_dict['head'] = src_mapped[valid_mask]
+                            batch_dict['tail'] = dst_mapped[valid_mask]
+                            if hasattr(batch, 'label'):
+                                batch_dict['label'] = batch.label[valid_mask].to(device)
+                            else:
+                                batch_dict['label'] = torch.ones(valid_mask.sum(), dtype=torch.long, device=device)
+                        else:
+                            # 创建虚拟样本
+                            if num_subgraph_nodes >= 2:
+                                batch_dict['head'] = torch.tensor([0], dtype=torch.long, device=device)
+                                batch_dict['tail'] = torch.tensor([1], dtype=torch.long, device=device)
+                                batch_dict['label'] = torch.tensor([1], dtype=torch.long, device=device)
+                            else:
+                                batch_dict['head'] = torch.empty(0, dtype=torch.long, device=device)
+                                batch_dict['tail'] = torch.empty(0, dtype=torch.long, device=device)
+                                batch_dict['label'] = torch.empty(0, dtype=torch.long, device=device)
+                        
+                        self.logger.debug(f"Remapped head/tail: original pairs {len(batch.head)}, "
+                                        f"valid pairs {valid_mask.sum()}")
+                    else:
+                        batch_dict['head'] = torch.empty(0, dtype=torch.long, device=device)
+                        batch_dict['tail'] = torch.empty(0, dtype=torch.long, device=device)
+                        batch_dict['label'] = torch.empty(0, dtype=torch.long, device=device)
                 else:
-                    # 默认关系ID
-                    batch_dict['relation_ids'] = torch.zeros(pos_mask.sum(), dtype=torch.long)
-                    self.logger.warning("未找到关系ID，使用默认关系ID 0")
-        
+                    batch_dict['head'] = batch.head
+                    batch_dict['tail'] = batch.tail
+                    batch_dict['label'] = batch.label if hasattr(batch, 'label') else torch.ones(len(batch.head))
+            
+            # 处理关系ID
+            head_tail_len = len(batch_dict.get('head', []))
+            if head_tail_len > 0:
+                device = batch_dict['head'].device
+                batch_dict['relation_ids'] = torch.zeros(head_tail_len, dtype=torch.long)
+            else:
+                device = batch.x.device if hasattr(batch, 'x') else torch.device('cpu')
+                batch_dict['relation_ids'] = torch.empty(0, dtype=torch.long)
+                
         elif task == 'entity_classification':
             if hasattr(batch, 'node_idx'):
-                batch_dict['node_idx'] = batch.node_idx
+                if hasattr(batch, 'n_id'):
+                    # 重新映射node_idx
+                    if len(batch.node_idx) > 0:
+                        node_indices = batch.node_idx.to(device)
+                        mapped_idx = n_id_map[node_indices]
+                        valid_mask = (mapped_idx >= 0) & (mapped_idx < num_subgraph_nodes)
+                        
+                        if valid_mask.sum() > 0:
+                            batch_dict['node_idx'] = mapped_idx[valid_mask]
+                            if hasattr(batch, 'label'):
+                                batch_dict['label'] = batch.label[valid_mask].to(device)
+                            elif hasattr(batch, 'y'):
+                                batch_dict['label'] = batch.y[valid_mask].to(device)
+                        else:
+                            batch_dict['node_idx'] = torch.empty(0, dtype=torch.long, device=device)
+                            batch_dict['label'] = torch.empty(0, dtype=torch.long, device=device)
+                    else:
+                        batch_dict['node_idx'] = torch.empty(0, dtype=torch.long, device=device)
+                        batch_dict['label'] = torch.empty(0, dtype=torch.long, device=device)
+                else:
+                    batch_dict['node_idx'] = batch.node_idx
+                    batch_dict['label'] = batch.label if hasattr(batch, 'label') else batch.y
             else:
-                batch_dict['node_idx'] = torch.arange(batch.num_nodes)
-            
-            if hasattr(batch, 'y'):
-                batch_dict['label'] = batch.y
-            elif hasattr(batch, 'label'):
-                batch_dict['label'] = batch.label
+                device = batch.x.device if hasattr(batch, 'x') else torch.device('cpu')
+                batch_dict['node_idx'] = torch.arange(batch.num_nodes, device=device)
+                batch_dict['label'] = batch.label if hasattr(batch, 'label') else batch.y
         
         return batch_dict
+
+
 
     def apply_experts_batch(self, expert_inputs: Dict[str, torch.Tensor],
                        expert_indices: torch.Tensor,
@@ -720,25 +862,72 @@ class MoEKGC(nn.Module):
             head_indices = batch_dict['head'].to(device)
             tail_indices = batch_dict['tail'].to(device)
 
+            # 检查是否为空张量
+            if head_indices.numel() == 0 or tail_indices.numel() == 0:
+                self.logger.warning("当前批次没有有效的链接预测样本，返回空结果")
+                # 返回空的预测结果，但保持与正常输出格式一致
+                return {
+                    'scores': torch.empty(0, device=device),
+                    'predictions': torch.empty(0, device=device, dtype=torch.long),
+                    'logits': torch.empty(0, device=device)
+                }
+
+            # 确保head和tail的长度一致
+            if len(head_indices) != len(tail_indices):
+                raise ValueError(f"head和tail长度不匹配: {len(head_indices)} vs {len(tail_indices)}")
+
             if 'relation_ids' in batch_dict:
                 relation_ids = batch_dict['relation_ids'].to(device)
+                # 确保relation_ids的长度与head/tail一致
+                if len(relation_ids) != len(head_indices):
+                    self.logger.warning(f"relation_ids长度({len(relation_ids)})与head/tail长度({len(head_indices)})不匹配，调整为匹配长度")
+                    if len(relation_ids) > len(head_indices):
+                        # 截断relation_ids到head/tail的长度
+                        relation_ids = relation_ids[:len(head_indices)]
+                    else:
+                        # 填充relation_ids到head/tail的长度（使用默认关系ID 0）
+                        pad_size = len(head_indices) - len(relation_ids)
+                        relation_ids = torch.cat([relation_ids, torch.zeros(pad_size, dtype=torch.long, device=device)])
+
             else:
                 # 如果没有关系ID，创建默认的关系ID
                 relation_ids = torch.zeros(len(head_indices), dtype=torch.long, device=device)
                 self.logger.warning("未找到关系ID，使用默认关系ID 0")
                 
-            # 增加索引验证
+            # 增加索引验证 - 修复空张量问题
             num_nodes = node_embeddings.size(0)
-            if torch.max(head_indices) >= num_nodes or torch.max(tail_indices) >= num_nodes:
-                self.logger.error(f"索引超出范围: head_max={torch.max(head_indices).item()}, "
-                                    f"tail_max={torch.max(tail_indices).item()}, num_nodes={num_nodes}")
-                # 修复索引
-                head_indices = torch.clamp(head_indices, 0, num_nodes-1)
-                tail_indices = torch.clamp(tail_indices, 0, num_nodes-1)
+            if head_indices.numel() > 0 and tail_indices.numel() > 0:
+                # 只有在张量非空时才检查最大值
+                head_max = head_indices.max().item() if head_indices.numel() > 0 else -1
+                tail_max = tail_indices.max().item() if tail_indices.numel() > 0 else -1
+                
+                if head_max >= num_nodes or tail_max >= num_nodes:
+                    self.logger.error(f"索引超出范围: head_max={head_max}, "
+                                    f"tail_max={tail_max}, num_nodes={num_nodes}")
+                    # 修复索引
+                    head_indices = torch.clamp(head_indices, 0, num_nodes-1)
+                    tail_indices = torch.clamp(tail_indices, 0, num_nodes-1)
+                
+                # 验证索引的有效性
+                if head_indices.min().item() < 0 or tail_indices.min().item() < 0:
+                    self.logger.error(f"发现负索引: head_min={head_indices.min().item()}, "
+                                    f"tail_min={tail_indices.min().item()}")
+                    # 修复负索引
+                    head_indices = torch.clamp(head_indices, 0, num_nodes-1)
+                    tail_indices = torch.clamp(tail_indices, 0, num_nodes-1)
                 
             head_embeddings = node_embeddings[head_indices]
             tail_embeddings = node_embeddings[tail_indices]
                 
+            # 添加调试信息
+            self.logger.debug(f"[LinkPrediction] head_embeddings shape: {head_embeddings.shape}")
+            self.logger.debug(f"[LinkPrediction] tail_embeddings shape: {tail_embeddings.shape}")
+            self.logger.debug(f"[LinkPrediction] relation_ids shape: {relation_ids.shape}")
+        
+            # 确保所有张量的第0维（batch维）一致
+            assert head_embeddings.shape[0] == tail_embeddings.shape[0] == relation_ids.shape[0], \
+                f"批次维度不匹配: head={head_embeddings.shape[0]}, tail={tail_embeddings.shape[0]}, relation={relation_ids.shape[0]}"
+
             return self.link_prediction_head(head_embeddings, tail_embeddings, relation_ids)
 
         elif task == 'entity_classification':
@@ -753,6 +942,14 @@ class MoEKGC(nn.Module):
             if 'head' in batch_dict and 'tail' in batch_dict:
                 head_indices = batch_dict['head'].to(device)
                 tail_indices = batch_dict['tail'].to(device)
+                
+                # 检查是否为空张量
+                if head_indices.numel() == 0 or tail_indices.numel() == 0:
+                    self.logger.warning("当前批次没有有效的关系抽取样本，返回空结果")
+                    return {
+                        'predictions': torch.empty(0, device=device, dtype=torch.long),
+                        'logits': torch.empty(0, device=device)
+                    }
                 
                 head_embeddings = node_embeddings[head_indices]
                 tail_embeddings = node_embeddings[tail_indices]

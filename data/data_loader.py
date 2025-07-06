@@ -279,28 +279,53 @@ class KGDataLoader:
         
         return G
     
+    # 在extract_graph_features方法中，添加实际的数据处理逻辑
     def extract_graph_features(self, G: nx.MultiDiGraph) -> Dict[str, torch.Tensor]:
         """
         从知识图谱中提取特征，供模型输入
-        参数:
-            G: NetworkX图
-        返回:
-            dict: 包含节点特征、边索引、边特征等
         """
         # 节点特征
         node_features = []
         node_mapping = {}
         
+        # 收集所有节点数据用于编码
+        node_texts = []
+        node_tabular = []
+        node_structured = []
+        
         for i, (node_id, node_data) in enumerate(G.nodes(data=True)):
             node_mapping[node_id] = i
-            # 构造节点特征向量（可根据实际需求自定义）
+            
+            # 构造节点特征向量
             feature = np.zeros(self.config.hidden_dim)
+            
             # 类型one-hot编码
-            type_idx = ['action', 'object', 'task', 'constraint', 'safety', 'spatial'].index(
-                node_data.get('type', 'object')
-            )
-            feature[type_idx] = 1.0
+            node_type = node_data.get('type', 'object')
+            type_mapping = {'action': 0, 'object': 1, 'task': 2, 'constraint': 3, 'safety': 4, 'spatial': 5}
+            if node_type in type_mapping:
+                feature[type_mapping[node_type]] = 1.0
+            
             node_features.append(feature)
+            
+            # 收集文本信息
+            text_content = f"{node_data.get('name', '')} {node_data.get('description', '')}"
+            node_texts.append(text_content)
+            
+            # 收集表格信息
+            tabular_data = [
+                node_data.get('timestamp', 0.0),
+                node_data.get('success', 0.0),
+                node_data.get('force', 0.0)
+            ]
+            node_tabular.append(tabular_data)
+            
+            # 收集结构化信息
+            structured_data = {
+                'task_features': node_data.get('task_params', {}),
+                'constraint_features': node_data.get('constraints', {}),
+                'safety_features': node_data.get('safety_limits', {})
+            }
+            node_structured.append(structured_data)
         
         node_features = torch.tensor(np.array(node_features), dtype=torch.float32)
         
@@ -311,41 +336,60 @@ class KGDataLoader:
         for u, v, edge_data in G.edges(data=True):
             if u in node_mapping and v in node_mapping:
                 edge_index.append([node_mapping[u], node_mapping[v]])
-                # 构造边特征向量（可根据实际需求自定义）
+                
+                # 构造边特征向量
                 edge_feat = np.zeros(self.config.graph.edge_hidden_dim)
-                # 这里可添加关系类型编码等
+                # 关系类型编码
+                rel_type = edge_data.get('type', 'default')
+                if rel_type == 'temporal':
+                    edge_feat[0] = 1.0
+                elif rel_type == 'spatial':
+                    edge_feat[1] = 1.0
+                elif rel_type == 'causal':
+                    edge_feat[2] = 1.0
+                
                 edge_features.append(edge_feat)
         
-        edge_index = torch.tensor(edge_index, dtype=torch.long).t()
-        edge_features = torch.tensor(np.array(edge_features), dtype=torch.float32)
+        edge_index = torch.tensor(edge_index, dtype=torch.long).t() if edge_index else torch.empty((2, 0), dtype=torch.long)
+        edge_features = torch.tensor(np.array(edge_features), dtype=torch.float32) if edge_features else torch.empty((0, self.config.graph.edge_hidden_dim))
         
         num_nodes = node_features.shape[0]
         seq_len = 128
-        tabular_dim = 3
-        task_dim = 256
-        constraint_dim = 256
-        safety_dim = 256
-
-        # 文本模态（BERT输入格式）
+        
+        # 使用实际的tokenizer处理文本
+        from transformers import AutoTokenizer
+        tokenizer = AutoTokenizer.from_pretrained('bert-base-uncased')
+        
+        # 处理文本数据
+        text_encodings = tokenizer(
+            node_texts,
+            max_length=seq_len,
+            padding='max_length',
+            truncation=True,
+            return_tensors='pt'
+        )
+        
         text_inputs = {
-            'input_ids': torch.zeros(num_nodes, seq_len, dtype=torch.long),
-            'attention_mask': torch.ones(num_nodes, seq_len, dtype=torch.long)
+            'input_ids': text_encodings['input_ids'],
+            'attention_mask': text_encodings['attention_mask']
         }
-        # 表格模态
+        
+        # 处理表格数据
         tabular_inputs = {
-            'numerical': torch.zeros(num_nodes, tabular_dim),
+            'numerical': torch.tensor(node_tabular, dtype=torch.float32),
             'categorical': {
                 'action': torch.zeros(num_nodes, dtype=torch.long),
                 'object_id': torch.zeros(num_nodes, dtype=torch.long)
             }
         }
-        # 结构化模态
+        
+        # 处理结构化数据
         structured_inputs = {
-            'task_features': torch.zeros(num_nodes, task_dim),
-            'constraint_features': torch.zeros(num_nodes, constraint_dim),
-            'safety_features': torch.zeros(num_nodes, safety_dim)
+            'task_features': torch.zeros(num_nodes, 256),
+            'constraint_features': torch.zeros(num_nodes, 256),
+            'safety_features': torch.zeros(num_nodes, 256)
         }
-    
+        
         return {
             'node_features': node_features,
             'edge_index': edge_index,

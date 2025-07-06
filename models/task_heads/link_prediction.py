@@ -174,10 +174,12 @@ class LinkPredictionHead(nn.Module):
         # Add bias
         if self.bias is not None:
             score = score + self.bias
-
+        # 确保输出格式正确，添加logits字段以兼容损失函数
         output = {
             'scores': score,
-            'probabilities': torch.sigmoid(score)
+            'logits': score,  # 添加logits字段
+            'probabilities': torch.sigmoid(score),
+            'predictions': (torch.sigmoid(score) > 0.5).long()  # 添加预测结果
         }
 
         if return_embeddings:

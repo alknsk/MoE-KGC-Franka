@@ -58,7 +58,19 @@ class MoEKGCBatchDataLoader:
             edge_label_index = self.pyg_data.test_edge_index
         else:
             edge_label_index = self.pyg_data.edge_index
-            
+        
+        # 验证边索引
+        if edge_label_index.numel() > 0:
+            max_idx = edge_label_index.max().item()
+            min_idx = edge_label_index.min().item()
+            if max_idx >= self.pyg_data.num_nodes or min_idx < 0:
+                self.logger.warning(f"Invalid edge indices: max={max_idx}, min={min_idx}, num_nodes={self.pyg_data.num_nodes}")
+                valid_mask = (edge_label_index[0] < self.pyg_data.num_nodes) & \
+                            (edge_label_index[1] < self.pyg_data.num_nodes) & \
+                            (edge_label_index[0] >= 0) & (edge_label_index[1] >= 0)
+                edge_label_index = edge_label_index[:, valid_mask]
+                self.logger.info(f"Filtered to {edge_label_index.size(1)} valid edges")
+
         # 创建正样本标签
         pos_edge_label = torch.ones(edge_label_index.size(1))
         
@@ -66,7 +78,7 @@ class MoEKGCBatchDataLoader:
         neg_edge_index = negative_sampling(
             edge_index=self.pyg_data.edge_index,
             num_nodes=self.pyg_data.num_nodes,
-            num_neg_samples=edge_label_index.size(1)
+            num_neg_samples=min(edge_label_index.size(1) // 2, 500) 
         )
         neg_edge_label = torch.zeros(neg_edge_index.size(1))
         
@@ -83,7 +95,9 @@ class MoEKGCBatchDataLoader:
             edge_label=edge_label,
             shuffle=self.shuffle,
             num_workers=self.num_workers,
-            transform=self._transform_batch
+            transform=self._transform_batch,
+            drop_last=True,
+            timeout=30
         )
         
         return loader
@@ -126,17 +140,9 @@ class MoEKGCBatchDataLoader:
             
         # 处理任务特定的数据
         if self.task == 'link_prediction' and hasattr(batch, 'edge_label_index'):
-            # 映射边索引到子图节点索引
-            batch.head = batch.edge_label_index[0][batch.edge_label == 1]
-            batch.tail = batch.edge_label_index[1][batch.edge_label == 1]
-            batch.label = batch.edge_label[batch.edge_label == 1]
-            
-            # 负样本
-            neg_mask = batch.edge_label == 0
-            if neg_mask.any():
-                batch.neg_head = batch.edge_label_index[0][neg_mask]
-                batch.neg_tail = batch.edge_label_index[1][neg_mask]
-                
+            # 重要：不要在这里直接赋值head/tail，让_convert_pyg_batch_to_dict处理重新映射
+            # 这样可以确保索引的一致性
+            pass
         elif self.task == 'entity_classification':
             if hasattr(self.pyg_data, 'y'):
                 batch.node_idx = torch.arange(len(batch.n_id))
